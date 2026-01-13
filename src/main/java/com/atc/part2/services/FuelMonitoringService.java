@@ -1,118 +1,117 @@
 package com.atc.part2.services;
 
 import com.atc.part2.models.FuelAlert;
-// TODO: Import Aircraft class from Part 1 when available
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+import java.util.Comparator;
+import java.util.UUID;
+import java.util.ArrayList;
 
 public class FuelMonitoringService {
-    // Fields
     private final ConcurrentHashMap<String, FuelAlert> activeFuelAlerts;
-    private final List<Object> monitoredAircraft; // TODO: Change to List<Aircraft> when Part 1 is ready
+    private final ConcurrentHashMap<String, Integer> aircraftFuelLevels;
     private final NotificationService notificationService;
+    private final int LOW_FUEL_THRESHOLD = 20;
+    private final int CRITICAL_FUEL_THRESHOLD = 10;
 
-    // Constructor
-    public FuelMonitoringService(List<Object> aircraft) {
-        // TODO: Initialize all fields
-        this.activeFuelAlerts = null;
-        this.monitoredAircraft = null;
-        this.notificationService = null;
+    public FuelMonitoringService(NotificationService notificationService) {
+        this.activeFuelAlerts = new ConcurrentHashMap<>();
+        this.aircraftFuelLevels = new ConcurrentHashMap<>();
+        this.notificationService = notificationService;
     }
 
-    // STREAMS & LAMBDAS METHODS
-    public List<Object> getLowFuelAircraft() {
-        // TODO: STREAM USAGE: Filter aircraft with low fuel
-        // monitoredAircraft.stream()
-        //     .filter(aircraft -> aircraft.getFuelLevel() <= 20)
-        //     .filter(aircraft -> !aircraft.getStatus().equals("LANDED"))
-        //     .sorted(Comparator.comparing(Aircraft::getFuelLevel))
-        //     .collect(Collectors.toList());
-        return null;
+    public List<String> getLowFuelAircraft() {
+        return aircraftFuelLevels.entrySet().stream()
+            .filter(entry -> entry.getValue() <= LOW_FUEL_THRESHOLD && entry.getValue() > CRITICAL_FUEL_THRESHOLD)
+            .map(Map.Entry::getKey)
+            .sorted(Comparator.comparing(aircraftFuelLevels::get))
+            .collect(Collectors.toList());
     }
 
-    public List<Object> getCriticalFuelAircraft() {
-        // TODO: STREAM USAGE: Filter aircraft with critical fuel
-        // monitoredAircraft.stream()
-        //     .filter(aircraft -> aircraft.getFuelLevel() <= 10)
-        //     .collect(Collectors.toList());
-        return null;
+    public List<String> getCriticalFuelAircraft() {
+        return aircraftFuelLevels.entrySet().stream()
+            .filter(entry -> entry.getValue() <= CRITICAL_FUEL_THRESHOLD)
+            .map(Map.Entry::getKey)
+            .collect(Collectors.toList());
     }
 
     public Map<String, Long> getFuelStatisticsByStatus() {
-        // TODO: STREAM USAGE: Group aircraft by fuel status
-        // monitoredAircraft.stream()
-        //     .collect(Collectors.groupingBy(
-        //         aircraft -> aircraft.getFuelLevel() <= 10 ? "CRITICAL" :
-        //                    aircraft.getFuelLevel() <= 20 ? "LOW" : "NORMAL",
-        //         Collectors.counting()));
-        return null;
+        return aircraftFuelLevels.entrySet().stream()
+            .collect(Collectors.groupingBy(
+                entry -> entry.getValue() <= CRITICAL_FUEL_THRESHOLD ? "CRITICAL" :
+                        entry.getValue() <= LOW_FUEL_THRESHOLD ? "LOW" : "NORMAL",
+                Collectors.counting()));
     }
 
     public OptionalDouble getAverageFuelLevel() {
-        // TODO: STREAM USAGE: Calculate average fuel level
-        // monitoredAircraft.stream()
-        //     .mapToInt(Aircraft::getFuelLevel)
-        //     .average();
-        return null;
+        return aircraftFuelLevels.values().stream()
+            .mapToInt(Integer::intValue)
+            .average();
     }
 
-    public List<Object> getAircraftNeedingPriority() {
-        // TODO: STREAM USAGE: Find aircraft needing landing priority due to fuel
-        // monitoredAircraft.stream()
-        //     .filter(aircraft -> aircraft.getFuelLevel() <= 15)
-        //     .filter(aircraft -> aircraft.getStatus().equals("APPROACHING"))
-        //     .sorted(Comparator.comparing(Aircraft::getFuelLevel))
-        //     .collect(Collectors.toList());
-        return null;
+    public List<String> getAircraftNeedingPriority() {
+        return aircraftFuelLevels.entrySet().stream()
+            .filter(entry -> entry.getValue() <= 15)
+            .map(Map.Entry::getKey)
+            .sorted(Comparator.comparing(aircraftFuelLevels::get))
+            .collect(Collectors.toList());
     }
 
-    public void updateFuelLevels() {
-        // TODO: STREAM USAGE: Update fuel for all in-flight aircraft
-        // monitoredAircraft.stream()
-        //     .filter(aircraft -> aircraft.getStatus().equals("AIRBORNE"))
-        //     .forEach(aircraft -> {
-        //         int newLevel = aircraft.getFuelLevel() - 2; // Consume 2% per update
-        //         aircraft.setFuelLevel(Math.max(0, newLevel));
-        //         checkFuelThresholds(aircraft);
-        //     });
+    public void updateFuelLevel(String aircraftId, int fuelLevel) {
+        int oldLevel = aircraftFuelLevels.getOrDefault(aircraftId, 100);
+        aircraftFuelLevels.put(aircraftId, fuelLevel);
+        checkFuelThresholds(aircraftId, oldLevel, fuelLevel);
     }
 
-    // FUEL MONITORING OPERATIONS
-    public FuelAlert createFuelAlert(Object aircraft) { // TODO: Change to Aircraft when available
-        // TODO: Create fuel alert for aircraft
-        return null;
+    public FuelAlert createFuelAlert(String aircraftId, int fuelLevel, String alertLevel) {
+        String alertId = "FA" + UUID.randomUUID().toString().substring(0, 8);
+        FuelAlert alert = new FuelAlert(alertId, aircraftId, fuelLevel, alertLevel);
+        activeFuelAlerts.put(alertId, alert);
+        return alert;
     }
 
-    public void escalateToEmergency(Object aircraft) { // TODO: Change to Aircraft when available
-        // TODO: Escalate aircraft to emergency status
+    public void escalateToEmergency(String aircraftId) {
+        activeFuelAlerts.values().stream()
+            .filter(alert -> aircraftId.equals(alert.getAircraftId()))
+            .forEach(alert -> {
+                alert.escalateToEmergency();
+                notificationService.sendEmergencyFuelAlert(aircraftId, alert.getCurrentFuelLevel());
+            });
     }
 
     public void resolveFuelAlert(String alertId, String resolution) {
-        // TODO: Resolve fuel alert with given resolution
+        FuelAlert alert = activeFuelAlerts.get(alertId);
+        if (alert != null) {
+            alert.resolve(resolution);
+        }
     }
 
     public List<FuelAlert> getActiveFuelAlerts() {
-        // TODO: Get all active fuel alerts
-        return null;
+        return activeFuelAlerts.values().stream()
+            .filter(alert -> !alert.isResolved())
+            .collect(Collectors.toList());
     }
 
-    // LAMBDA USAGE EXAMPLES
     public void processLowFuelAircraft() {
-        // TODO: LAMBDA USAGE
-        // getLowFuelAircraft().forEach(aircraft -> 
-        //     notificationService.sendFuelAlert(aircraft));
+        getLowFuelAircraft().forEach(aircraftId -> 
+            notificationService.sendFuelAlert(aircraftId, aircraftFuelLevels.get(aircraftId)));
     }
 
     public void checkAllFuelThresholds() {
-        // TODO: LAMBDA USAGE
-        // monitoredAircraft.parallelStream()
-        //     .forEach(this::checkFuelThresholds);
+        aircraftFuelLevels.entrySet().parallelStream()
+            .forEach(entry -> checkFuelThresholds(entry.getKey(), 100, entry.getValue()));
     }
 
-    // Helper Methods
-    private void checkFuelThresholds(Object aircraft) { // TODO: Change to Aircraft when available
-        // TODO: Check fuel thresholds for individual aircraft
+    private void checkFuelThresholds(String aircraftId, int oldLevel, int newLevel) {
+        if (newLevel <= CRITICAL_FUEL_THRESHOLD && oldLevel > CRITICAL_FUEL_THRESHOLD) {
+            createFuelAlert(aircraftId, newLevel, "CRITICAL");
+            escalateToEmergency(aircraftId);
+        } else if (newLevel <= LOW_FUEL_THRESHOLD && oldLevel > LOW_FUEL_THRESHOLD) {
+            createFuelAlert(aircraftId, newLevel, "LOW");
+            notificationService.sendFuelAlert(aircraftId, newLevel);
+        }
     }
 }

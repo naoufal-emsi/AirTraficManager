@@ -2,101 +2,94 @@ package com.atc.part2.services;
 
 import com.atc.part2.models.Flight;
 import com.atc.part2.models.WeatherAlert;
-// TODO: Import Aircraft class from Part 1 when available
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
+import java.util.ArrayList;
 
 public class NotificationService {
-    // Fields
     private final ExecutorService notificationPool;
     private final BlockingQueue<String> notificationQueue;
-    private final ConcurrentHashMap<String, List<String>> subscribedFlights;
+    private final ConcurrentHashMap<String, List<String>> notificationHistory;
 
-    // Constructor
     public NotificationService() {
-        // TODO: Initialize all fields
-        this.notificationPool = null;
-        this.notificationQueue = null;
-        this.subscribedFlights = null;
+        this.notificationPool = Executors.newFixedThreadPool(3);
+        this.notificationQueue = new LinkedBlockingQueue<>();
+        this.notificationHistory = new ConcurrentHashMap<>();
     }
 
-    // NOTIFICATION METHODS WITH LAMBDAS
     public CompletableFuture<Void> sendWeatherNotification(Flight flight, WeatherAlert alert) {
-        // TODO: LAMBDA USAGE: Async notification sending
-        // return CompletableFuture.runAsync(() -> {
-        //     String message = formatWeatherMessage(flight, alert);
-        //     notificationQueue.offer(message);
-        //     logNotification(flight.getFlightId(), "WEATHER", message);
-        // }, notificationPool);
-        return null;
+        return CompletableFuture.runAsync(() -> {
+            String message = formatWeatherMessage(flight, alert);
+            notificationQueue.offer(message);
+            logNotification(flight.getFlightId(), "WEATHER", message);
+        }, notificationPool);
     }
 
-    public CompletableFuture<Void> sendFuelAlert(Object aircraft) { // TODO: Change to Aircraft when available
-        // TODO: LAMBDA USAGE: Async fuel alert
-        // return CompletableFuture.runAsync(() -> {
-        //     String message = formatFuelMessage(aircraft);
-        //     notificationQueue.offer(message);
-        //     logNotification(aircraft.getAircraftId(), "FUEL", message);
-        // }, notificationPool);
-        return null;
+    public CompletableFuture<Void> sendFuelAlert(String aircraftId, int fuelLevel) {
+        return CompletableFuture.runAsync(() -> {
+            String message = formatFuelMessage(aircraftId, fuelLevel);
+            notificationQueue.offer(message);
+            logNotification(aircraftId, "FUEL", message);
+        }, notificationPool);
+    }
+
+    public CompletableFuture<Void> sendEmergencyFuelAlert(String aircraftId, int fuelLevel) {
+        return CompletableFuture.runAsync(() -> {
+            String message = "EMERGENCY: Aircraft " + aircraftId + " critical fuel: " + fuelLevel + "%";
+            notificationQueue.offer(message);
+            logNotification(aircraftId, "EMERGENCY", message);
+        }, notificationPool);
     }
 
     public void broadcastToMultipleFlights(List<Flight> flights, String message) {
-        // TODO: LAMBDA USAGE: Broadcast to multiple flights
-        // flights.parallelStream()
-        //     .forEach(flight -> sendNotification(flight.getFlightId(), message));
+        flights.parallelStream()
+            .forEach(flight -> sendNotification(flight.getFlightId(), message));
     }
 
-    public void notifyByCondition(Predicate<Flight> condition, String message) {
-        // TODO: LAMBDA USAGE: Conditional notifications
-        // getAllFlights().stream()
-        //     .filter(condition)
-        //     .forEach(flight -> sendNotification(flight.getFlightId(), message));
-    }
-
-    // NOTIFICATION OPERATIONS
     public void sendNotification(String flightId, String message) {
-        // TODO: Send notification to specific flight
-    }
-
-    public void subscribeToNotifications(String flightId, String notificationType) {
-        // TODO: Subscribe flight to notification type
-    }
-
-    public void unsubscribeFromNotifications(String flightId, String notificationType) {
-        // TODO: Unsubscribe flight from notification type
+        CompletableFuture.runAsync(() -> {
+            System.out.println("[NOTIFICATION] " + flightId + ": " + message);
+            logNotification(flightId, "INFO", message);
+        }, notificationPool);
     }
 
     public List<String> getNotificationHistory(String flightId) {
-        // TODO: Get notification history for flight
-        return null;
+        return notificationHistory.getOrDefault(flightId, new ArrayList<>());
     }
 
     public void processNotificationQueue() {
-        // TODO: Process pending notifications in queue
+        while (!notificationQueue.isEmpty()) {
+            try {
+                String notification = notificationQueue.take();
+                System.out.println("[PROCESSING] " + notification);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
     }
 
-    // Helper Methods
+    public void shutdown() {
+        notificationPool.shutdown();
+    }
+
     private String formatWeatherMessage(Flight flight, WeatherAlert alert) {
-        // TODO: Format weather notification message
-        return null;
+        return String.format("Weather Alert: Flight %s affected by %s (%s severity) at %s", 
+            flight.getFlightNumber(), alert.getAlertType(), alert.getSeverity(), alert.getAffectedAirport());
     }
 
-    private String formatFuelMessage(Object aircraft) { // TODO: Change to Aircraft when available
-        // TODO: Format fuel alert message
-        return null;
+    private String formatFuelMessage(String aircraftId, int fuelLevel) {
+        return String.format("Fuel Alert: Aircraft %s fuel level: %d%%", aircraftId, fuelLevel);
     }
 
     private void logNotification(String flightId, String type, String message) {
-        // TODO: Log notification to database
-    }
-
-    private List<Flight> getAllFlights() {
-        // TODO: Get all flights from database or cache
-        return null;
+        notificationHistory.computeIfAbsent(flightId, k -> new ArrayList<>()).add(
+            String.format("[%s] %s: %s", java.time.LocalDateTime.now(), type, message));
     }
 }

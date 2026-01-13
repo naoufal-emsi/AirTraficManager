@@ -57,51 +57,81 @@ public class AirTrafficSystem {
 
     // INITIALIZATION METHODS
     private static void initializeDatabase() {
-        // TODO: Initialize MongoDB connection
-        // - Connect to MongoDB
-        // - Create collections if they don't exist
-        // - Create indexes
-        // - Insert sample data if needed
-        // - Verify connection
         System.out.println("Initializing database...");
+        try {
+            DatabaseManager.connect();
+            if (DatabaseManager.getInstance().testConnection()) {
+                System.out.println("✅ Database connection verified");
+            } else {
+                throw new RuntimeException("Database connection test failed");
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Database initialization failed: " + e.getMessage());
+            throw e;
+        }
     }
 
     private static void initializeServices() {
-        // TODO: Initialize all services
-        // - Create WeatherService instance
-        // - Create FuelMonitoringService instance
-        // - Create NotificationService instance
-        // - Configure service dependencies
         System.out.println("Initializing services...");
+        try {
+            notificationService = new com.atc.part2.services.NotificationService();
+            com.atc.part2.dao.FlightDAO flightDAO = new com.atc.part2.dao.FlightDAO();
+            weatherService = new com.atc.part2.services.WeatherService(flightDAO, notificationService);
+            fuelMonitoringService = new com.atc.part2.services.FuelMonitoringService(notificationService);
+            System.out.println("✅ Services initialized successfully");
+        } catch (Exception e) {
+            System.err.println("❌ Service initialization failed: " + e.getMessage());
+            throw e;
+        }
     }
 
     private static void initializeControllers() {
-        // TODO: Initialize controllers
-        // - Create FlightScheduler with services
-        // - Create WeatherController with services
-        // - Create LandingController (Part 1)
-        // - Create RunwayManager (Part 1)
-        // - Set up controller interactions
         System.out.println("Initializing controllers...");
+        try {
+            com.atc.part2.dao.FlightDAO flightDAO = new com.atc.part2.dao.FlightDAO();
+            flightScheduler = new com.atc.part2.controllers.FlightScheduler(
+                weatherService, fuelMonitoringService, notificationService, flightDAO);
+            weatherController = new com.atc.part2.controllers.WeatherController(
+                weatherService, flightScheduler);
+            System.out.println("✅ Controllers initialized successfully");
+        } catch (Exception e) {
+            System.err.println("❌ Controller initialization failed: " + e.getMessage());
+            throw e;
+        }
     }
 
     private static void startBackgroundThreads() {
-        // TODO: Start all background threads
-        // - Start flight processing threads
-        // - Start weather monitoring thread
-        // - Start fuel monitoring thread
-        // - Start runway monitoring thread (Part 1)
-        // - Start system health monitoring
         System.out.println("Starting background threads...");
-        isRunning = true;
+        try {
+            flightScheduler.startFlightWorkers();
+            weatherController.startWeatherProcessing();
+            
+            // Start monitoring threads
+            com.atc.part2.threads.WeatherMonitor weatherMonitor = 
+                new com.atc.part2.threads.WeatherMonitor(weatherService);
+            com.atc.part2.threads.FuelMonitor fuelMonitor = 
+                new com.atc.part2.threads.FuelMonitor(fuelMonitoringService);
+            
+            new Thread(weatherMonitor).start();
+            new Thread(fuelMonitor).start();
+            
+            isRunning = true;
+            System.out.println("✅ Background threads started successfully");
+        } catch (Exception e) {
+            System.err.println("❌ Failed to start background threads: " + e.getMessage());
+            throw e;
+        }
     }
 
     private static void launchGUI(String[] args) {
-        // TODO: Launch JavaFX GUI
-        // - Pass controllers to GUI
-        // - Start JavaFX application
         System.out.println("Launching GUI...");
-        Application.launch(AirTrafficGUI.class, args);
+        try {
+            isInitialized = true;
+            javafx.application.Application.launch(com.atc.gui.AirTrafficGUI.class, args);
+        } catch (Exception e) {
+            System.err.println("❌ GUI launch failed: " + e.getMessage());
+            throw e;
+        }
     }
 
     private static void setupShutdownHook() {
@@ -152,11 +182,12 @@ public class AirTrafficSystem {
     }
 
     private static void closeDatabaseConnections() {
-        // TODO: Close database connections
-        // - Disconnect from MongoDB
-        // - Close connection pools
-        // - Save any pending data
         System.out.println("Closing database connections...");
+        try {
+            DatabaseManager.disconnect();
+        } catch (Exception e) {
+            System.err.println("Error closing database: " + e.getMessage());
+        }
     }
 
     private static void saveSystemState() {

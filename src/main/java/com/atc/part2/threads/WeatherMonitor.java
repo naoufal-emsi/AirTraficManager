@@ -3,72 +3,65 @@ package com.atc.part2.threads;
 import com.atc.part2.services.WeatherService;
 import com.atc.part2.models.WeatherAlert;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.Random;
 
 public class WeatherMonitor implements Runnable {
-    // Fields
     private final WeatherService weatherService;
     private final ScheduledExecutorService scheduler;
-    private final ConcurrentHashMap<String, WeatherAlert> activeAlerts;
     private volatile boolean running;
+    private final Random random;
+    private final String[] airports = {"JFK", "LAX", "LHR", "CDG", "DXB"};
+    private final String[] weatherTypes = {"STORM", "FOG", "WIND", "SNOW", "RAIN"};
+    private final String[] severities = {"LOW", "MEDIUM", "HIGH", "CRITICAL"};
 
-    // Constructor
     public WeatherMonitor(WeatherService weatherService) {
-        // TODO: Initialize all fields
-        this.weatherService = null;
-        this.scheduler = null;
-        this.activeAlerts = null;
+        this.weatherService = weatherService;
+        this.scheduler = Executors.newScheduledThreadPool(1);
+        this.running = true;
+        this.random = new Random();
     }
 
-    // Thread Methods
     @Override
     public void run() {
-        // TODO: Monitors weather every 30 seconds
-        // - Check weather conditions
-        // - Generate alerts if needed
-        // - Update existing alerts
-        // - Notify affected flights
+        scheduler.scheduleAtFixedRate(() -> {
+            if (running) {
+                checkWeatherConditions();
+                updateExistingAlerts();
+            }
+        }, 0, 30, TimeUnit.SECONDS);
     }
 
     public void stop() {
-        // TODO: Graceful shutdown
-        // - Set running = false
-        // - Shutdown scheduler
+        running = false;
+        scheduler.shutdown();
     }
 
-    // Business Methods
     private void checkWeatherConditions() {
-        // TODO: Check current weather conditions
-        // - Simulate weather data
-        // - Detect severe conditions
-        // - Generate alerts as needed
+        // Simulate weather monitoring
+        if (random.nextDouble() < 0.3) { // 30% chance of weather event
+            String airport = airports[random.nextInt(airports.length)];
+            String weatherType = weatherTypes[random.nextInt(weatherTypes.length)];
+            String severity = severities[random.nextInt(severities.length)];
+            
+            generateWeatherAlert(airport, weatherType, severity);
+        }
     }
 
-    private void generateWeatherAlert(String airport, String condition) {
-        // TODO: Create new weather alert
-        // - Determine severity
-        // - Set affected runways
-        // - Activate alert
+    private void generateWeatherAlert(String airport, String weatherType, String severity) {
+        WeatherAlert alert = weatherService.createWeatherAlert(weatherType, severity, airport);
+        alert.setDescription(String.format("%s %s affecting %s airport", severity, weatherType, airport));
+        weatherService.activateAlert(alert.getAlertId());
+        System.out.println("[WEATHER MONITOR] Generated alert: " + alert.getDescription());
     }
 
     private void updateExistingAlerts() {
-        // TODO: Update existing weather alerts
-        // - Check if alerts should expire
-        // - Update severity if changed
-        // - Deactivate resolved alerts
-    }
-
-    private void notifyAffectedFlights(WeatherAlert alert) {
-        // TODO: Notify flights affected by weather
-        // - Find affected flights using streams
-        // - Apply delays
-        // - Send notifications
-    }
-
-    private void simulateWeatherChange() {
-        // TODO: Random weather generation for testing
-        // - Generate random weather events
-        // - Vary severity levels
-        // - Affect different airports
+        weatherService.getActiveAlerts().stream()
+            .filter(alert -> random.nextDouble() < 0.1) // 10% chance to resolve
+            .forEach(alert -> {
+                weatherService.deactivateAlert(alert.getAlertId());
+                System.out.println("[WEATHER MONITOR] Resolved alert: " + alert.getAlertId());
+            });
     }
 }

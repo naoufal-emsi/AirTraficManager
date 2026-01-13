@@ -1,11 +1,10 @@
 package com.atc.part2.models;
 
 import java.time.LocalDateTime;
-import java.time.Duration;
 import java.util.List;
+import java.util.ArrayList;
 
 public class WeatherAlert {
-    // Fields
     private String alertId;
     private String alertType;
     private String severity;
@@ -17,137 +16,56 @@ public class WeatherAlert {
     private boolean isActive;
     private List<String> affectedFlights;
 
-    // Constructors
-    public WeatherAlert(String alertType, String severity, String affectedAirport) {
-        // TODO: Initialize basic fields
+    public WeatherAlert(String alertId, String alertType, String severity, String affectedAirport) {
+        this.alertId = alertId;
+        this.alertType = alertType;
+        this.severity = severity;
+        this.affectedAirport = affectedAirport;
+        this.startTime = LocalDateTime.now();
+        this.isActive = true;
+        this.affectedRunways = new ArrayList<>();
+        this.affectedFlights = new ArrayList<>();
     }
 
-    public WeatherAlert(String alertType, String severity, String affectedAirport, 
-                       LocalDateTime startTime, LocalDateTime endTime) {
-        // TODO: Initialize all fields
-    }
-
-    // Getters and Setters
-    public String getAlertId() {
-        // TODO: Return alertId
-        return null;
-    }
-
-    public void setAlertId(String alertId) {
-        // TODO: Set alertId
-    }
-
-    public String getAlertType() {
-        // TODO: Return alertType
-        return null;
-    }
-
-    public void setAlertType(String alertType) {
-        // TODO: Set alertType
-    }
-
-    public String getSeverity() {
-        // TODO: Return severity
-        return null;
-    }
-
-    public void setSeverity(String severity) {
-        // TODO: Set severity
-    }
-
-    public String getAffectedAirport() {
-        // TODO: Return affectedAirport
-        return null;
-    }
-
-    public void setAffectedAirport(String affectedAirport) {
-        // TODO: Set affectedAirport
-    }
-
-    public List<String> getAffectedRunways() {
-        // TODO: Return affectedRunways
-        return null;
-    }
-
-    public void setAffectedRunways(List<String> affectedRunways) {
-        // TODO: Set affectedRunways
-    }
-
-    public LocalDateTime getStartTime() {
-        // TODO: Return startTime
-        return null;
-    }
-
-    public void setStartTime(LocalDateTime startTime) {
-        // TODO: Set startTime
-    }
-
-    public LocalDateTime getEndTime() {
-        // TODO: Return endTime
-        return null;
-    }
-
-    public void setEndTime(LocalDateTime endTime) {
-        // TODO: Set endTime
-    }
-
-    public String getDescription() {
-        // TODO: Return description
-        return null;
-    }
-
-    public void setDescription(String description) {
-        // TODO: Set description
-    }
-
-    public boolean isActive() {
-        // TODO: Return isActive
-        return false;
-    }
-
-    public void setActive(boolean active) {
-        // TODO: Set isActive
-    }
-
-    public List<String> getAffectedFlights() {
-        // TODO: Return affectedFlights
-        return null;
-    }
-
-    public void setAffectedFlights(List<String> affectedFlights) {
-        // TODO: Set affectedFlights
-    }
-
-    // Business Methods
-    public boolean isCritical() {
-        // TODO: Return severity.equals("CRITICAL")
-        return false;
-    }
-
-    public boolean isCurrentlyActive() {
-        // TODO: Check if current time is within start/end
-        return false;
-    }
-
-    public void activate() {
-        // TODO: Set isActive=true, startTime=now
-    }
-
-    public void deactivate() {
-        // TODO: Set isActive=false, endTime=now
-    }
+    // Getters and setters
+    public String getAlertId() { return alertId; }
+    public void setAlertId(String alertId) { this.alertId = alertId; }
+    
+    public String getAlertType() { return alertType; }
+    public void setAlertType(String alertType) { this.alertType = alertType; }
+    
+    public String getSeverity() { return severity; }
+    public void setSeverity(String severity) { this.severity = severity; }
+    
+    public String getAffectedAirport() { return affectedAirport; }
+    public void setAffectedAirport(String affectedAirport) { this.affectedAirport = affectedAirport; }
+    
+    public List<String> getAffectedRunways() { return affectedRunways; }
+    public void setAffectedRunways(List<String> affectedRunways) { this.affectedRunways = affectedRunways; }
+    
+    public LocalDateTime getStartTime() { return startTime; }
+    public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
+    
+    public LocalDateTime getEndTime() { return endTime; }
+    public void setEndTime(LocalDateTime endTime) { this.endTime = endTime; }
+    
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    
+    public boolean isActive() { return isActive; }
+    public void setActive(boolean active) { this.isActive = active; }
+    
+    public List<String> getAffectedFlights() { return affectedFlights; }
+    public void setAffectedFlights(List<String> affectedFlights) { this.affectedFlights = affectedFlights; }
 
     public void addAffectedFlight(String flightId) {
-        // TODO: Add flight to affected list
+        if (!affectedFlights.contains(flightId)) {
+            affectedFlights.add(flightId);
+        }
     }
 
-    public Duration getDuration() {
-        // TODO: Calculate alert duration
-        return null;
-    }
-
-    public boolean affectsRunway(String runwayId) {
-        // TODO: Check if runway is affected
-        return false;
+    public void resolve() {
+        this.isActive = false;
+        this.endTime = LocalDateTime.now();
     }
 }

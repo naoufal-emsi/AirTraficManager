@@ -5,156 +5,174 @@ import com.atc.part2.models.WeatherAlert;
 import com.atc.part2.services.WeatherService;
 import com.atc.part2.services.FuelMonitoringService;
 import com.atc.part2.services.NotificationService;
+import com.atc.part2.dao.FlightDAO;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.Comparator;
 
 public class FlightScheduler {
-    // THREAD POOLS
-    private final ExecutorService flightThreadPool;     // 5 threads for flight operations
-    private final ExecutorService weatherThreadPool;    // 2 threads for weather processing
-    private final ScheduledExecutorService monitorPool; // 2 threads for monitoring
-
-    // CONCURRENT COLLECTIONS
+    private final ExecutorService flightThreadPool;
+    private final ScheduledExecutorService monitorPool;
     private final ConcurrentHashMap<String, Flight> activeFlights;
     private final BlockingQueue<Flight> flightQueue;
-    private final ConcurrentLinkedQueue<String> delayedFlights;
-
-    // SERVICES
     private final WeatherService weatherService;
     private final FuelMonitoringService fuelService;
     private final NotificationService notificationService;
-
-    // ATOMIC COUNTERS
+    private final FlightDAO flightDAO;
     private final AtomicInteger totalFlights;
     private final AtomicInteger delayedFlightsCount;
-    private final AtomicInteger cancelledFlights;
 
-    // Constructor
-    public FlightScheduler(WeatherService weatherService, FuelMonitoringService fuelService) {
-        // TODO: Initialize all fields
-        this.flightThreadPool = null;
-        this.weatherThreadPool = null;
-        this.monitorPool = null;
-        this.activeFlights = null;
-        this.flightQueue = null;
-        this.delayedFlights = null;
-        this.weatherService = null;
-        this.fuelService = null;
-        this.notificationService = null;
-        this.totalFlights = null;
-        this.delayedFlightsCount = null;
-        this.cancelledFlights = null;
+    public FlightScheduler(WeatherService weatherService, FuelMonitoringService fuelService, 
+                          NotificationService notificationService, FlightDAO flightDAO) {
+        this.flightThreadPool = Executors.newFixedThreadPool(5);
+        this.monitorPool = Executors.newScheduledThreadPool(2);
+        this.activeFlights = new ConcurrentHashMap<>();
+        this.flightQueue = new LinkedBlockingQueue<>();
+        this.weatherService = weatherService;
+        this.fuelService = fuelService;
+        this.notificationService = notificationService;
+        this.flightDAO = flightDAO;
+        this.totalFlights = new AtomicInteger(0);
+        this.delayedFlightsCount = new AtomicInteger(0);
     }
 
-    // MAIN OPERATIONS WITH STREAMS
     public void scheduleFlight(Flight flight) {
-        // TODO: Schedule new flight
-        // - Add flight to activeFlights map
-        // - Add to flightQueue for processing
-        // - Log scheduling event
+        activeFlights.put(flight.getFlightId(), flight);
+        flightQueue.offer(flight);
+        flightDAO.saveFlight(flight);
+        totalFlights.incrementAndGet();
     }
 
     public void processScheduledFlights() {
-        // TODO: STREAM USAGE: Process flights scheduled for today
-        // activeFlights.values().stream()
-        //     .filter(Flight::isScheduledToday)
-        //     .filter(flight -> flight.getStatus().equals("SCHEDULED"))
-        //     .forEach(this::processFlight);
+        activeFlights.values().stream()
+            .filter(flight -> "SCHEDULED".equals(flight.getStatus()))
+            .forEach(this::processFlight);
     }
 
     public List<Flight> getDelayedFlights() {
-        // TODO: STREAM USAGE: Get all delayed flights
-        // activeFlights.values().stream()
-        //     .filter(Flight::isDelayed)
-        //     .sorted(Comparator.comparing(Flight::getDelayMinutes).reversed())
-        //     .collect(Collectors.toList());
-        return null;
+        return activeFlights.values().stream()
+            .filter(flight -> flight.getDelayMinutes() > 0)
+            .sorted(Comparator.comparing(Flight::getDelayMinutes).reversed())
+            .collect(Collectors.toList());
     }
 
     public void handleWeatherImpact(WeatherAlert alert) {
-        // TODO: STREAM USAGE: Handle weather impact on flights
-        // weatherService.getAffectedFlights(alert).stream()
-        //     .forEach(flight -> applyWeatherDelay(flight, alert));
+        weatherService.getAffectedFlights(alert).stream()
+            .forEach(flight -> applyWeatherDelay(flight, alert));
     }
 
     public Map<String, List<Flight>> getFlightsByStatus() {
-        // TODO: STREAM USAGE: Group flights by status
-        // activeFlights.values().stream()
-        //     .collect(Collectors.groupingBy(Flight::getStatus));
-        return null;
+        return activeFlights.values().stream()
+            .collect(Collectors.groupingBy(Flight::getStatus));
     }
 
     public void rescheduleDelayedFlights() {
-        // TODO: STREAM USAGE: Reschedule flights with delays
-        // getDelayedFlights().stream()
-        //     .filter(flight -> flight.getDelayMinutes() > 60)
-        //     .forEach(this::rescheduleToNextSlot);
+        getDelayedFlights().stream()
+            .filter(flight -> flight.getDelayMinutes() > 60)
+            .forEach(this::rescheduleToNextSlot);
     }
 
-    // THREAD MANAGEMENT
     public void startFlightWorkers() {
-        // TODO: Start 5 FlightWorker threads
+        for (int i = 0; i < 5; i++) {
+            flightThreadPool.submit(new FlightWorker(i));
+        }
     }
 
-    public void startWeatherMonitoring() {
-        // TODO: Start WeatherMonitor thread
-    }
-
-    public void startFuelMonitoring() {
-        // TODO: Start FuelMonitor thread
-    }
-
-    public void shutdown() {
-        // TODO: Graceful shutdown of all threads
-    }
-
-    // STATISTICS WITH STREAMS
-    public Object getFlightStatistics() { // TODO: Create FlightStatistics class
-        // TODO: Calculate statistics using streams:
-        // - Total flights: activeFlights.size()
-        // - On-time percentage: flights.stream().filter(not delayed).count() / total
-        // - Average delay: flights.stream().mapToInt(delay).average()
-        // - Flights by status: groupingBy(status)
-        return null;
-    }
-
-    // LAMBDA USAGE EXAMPLES
     public void notifyDelayedPassengers() {
-        // TODO: LAMBDA USAGE
-        // getDelayedFlights().forEach(flight -> 
-        //     notificationService.sendDelayNotification(flight));
+        getDelayedFlights().forEach(flight -> 
+            notificationService.sendNotification(flight.getFlightId(), 
+                "Flight delayed by " + flight.getDelayMinutes() + " minutes"));
     }
 
     public void updateFlightStatuses() {
-        // TODO: LAMBDA USAGE
-        // activeFlights.values().parallelStream()
-        //     .forEach(this::updateFlightStatus);
+        activeFlights.values().parallelStream()
+            .forEach(this::updateFlightStatus);
     }
 
-    // Helper Methods
+    public Map<String, Object> getFlightStatistics() {
+        long totalCount = activeFlights.size();
+        long onTimeCount = activeFlights.values().stream()
+            .filter(flight -> flight.getDelayMinutes() == 0)
+            .count();
+        double averageDelay = activeFlights.values().stream()
+            .mapToInt(Flight::getDelayMinutes)
+            .average().orElse(0.0);
+        
+        return Map.of(
+            "totalFlights", totalCount,
+            "onTimePercentage", totalCount > 0 ? (double) onTimeCount / totalCount * 100 : 0,
+            "averageDelay", averageDelay,
+            "flightsByStatus", getFlightsByStatus()
+        );
+    }
+
+    public void shutdown() {
+        flightThreadPool.shutdown();
+        monitorPool.shutdown();
+        notificationService.shutdown();
+    }
+
     private void processFlight(Flight flight) {
-        // TODO: Process individual flight
+        flight.setStatus("IN_FLIGHT");
+        flightDAO.updateFlightStatus(flight.getFlightId(), "IN_FLIGHT");
     }
 
     private void applyWeatherDelay(Flight flight, WeatherAlert alert) {
-        // TODO: Apply weather delay to flight
+        int delay = calculateWeatherDelay(alert.getSeverity());
+        flight.addDelay(delay, "WEATHER");
+        flightDAO.updateFlightDelay(flight.getFlightId(), flight.getDelayMinutes(), "WEATHER");
+        delayedFlightsCount.incrementAndGet();
     }
 
     private void rescheduleToNextSlot(Flight flight) {
-        // TODO: Reschedule flight to next available slot
+        flight.setStatus("RESCHEDULED");
+        flightDAO.updateFlightStatus(flight.getFlightId(), "RESCHEDULED");
     }
 
     private void updateFlightStatus(Flight flight) {
-        // TODO: Update flight status
+        flightDAO.updateFlightStatus(flight.getFlightId(), flight.getStatus());
     }
 
-    // Getters for integration with other parts
+    private int calculateWeatherDelay(String severity) {
+        return switch (severity) {
+            case "LOW" -> 15;
+            case "MEDIUM" -> 30;
+            case "HIGH" -> 60;
+            case "CRITICAL" -> 120;
+            default -> 0;
+        };
+    }
+
+    private class FlightWorker implements Runnable {
+        private final int workerId;
+        
+        public FlightWorker(int workerId) {
+            this.workerId = workerId;
+        }
+        
+        @Override
+        public void run() {
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    Flight flight = flightQueue.take();
+                    processFlight(flight);
+                    Thread.sleep(1000); // Simulate processing time
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+    }
+
     public ConcurrentHashMap<String, Flight> getActiveFlights() {
         return activeFlights;
     }

@@ -1,12 +1,16 @@
 package com.atc.part2.models;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.time.Duration;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.stream.Collectors;
+import java.util.Map;
+import java.util.function.Predicate;
+import java.util.Comparator;
 
 public class Flight {
-    // Fields
     private String flightId;
     private String flightNumber;
     private String aircraftId;
@@ -22,184 +26,109 @@ public class Flight {
     private List<String> weatherAlerts;
     private boolean isAffectedByWeather;
 
-    // Constructors
     public Flight(String flightId, String flightNumber, String aircraftId, 
                   String origin, String destination, LocalDateTime scheduledDeparture) {
-        // TODO: Initialize all fields
+        this.flightId = flightId;
+        this.flightNumber = flightNumber;
+        this.aircraftId = aircraftId;
+        this.origin = origin;
+        this.destination = destination;
+        this.scheduledDeparture = scheduledDeparture;
+        this.status = "SCHEDULED";
+        this.delayMinutes = 0;
+        this.weatherAlerts = new ArrayList<>();
+        this.isAffectedByWeather = false;
     }
 
-    public Flight(String flightId, String flightNumber, String origin, String destination) {
-        // TODO: Initialize basic fields
+    // Stream processing predicates
+    public static final Predicate<Flight> IS_DELAYED = flight -> flight.delayMinutes > 0;
+    public static final Predicate<Flight> IS_WEATHER_AFFECTED = flight -> flight.isAffectedByWeather;
+    public static final Predicate<Flight> IS_CANCELLED = flight -> "CANCELLED".equals(flight.status);
+    public static final Predicate<Flight> IS_IN_FLIGHT = flight -> "IN_FLIGHT".equals(flight.status);
+    
+    // Stream processing methods
+    public static List<Flight> filterDelayed(List<Flight> flights) {
+        return flights.stream().filter(IS_DELAYED).collect(Collectors.toList());
+    }
+    
+    public static List<Flight> filterByOrigin(List<Flight> flights, String origin) {
+        return flights.stream().filter(f -> origin.equals(f.origin)).collect(Collectors.toList());
+    }
+    
+    public static Map<String, List<Flight>> groupByStatus(List<Flight> flights) {
+        return flights.stream().collect(Collectors.groupingBy(Flight::getStatus));
+    }
+    
+    public static double getAverageDelay(List<Flight> flights) {
+        return flights.stream().mapToInt(Flight::getDelayMinutes).average().orElse(0.0);
+    }
+    
+    public static List<Flight> sortByDelay(List<Flight> flights) {
+        return flights.stream().sorted(Comparator.comparingInt(Flight::getDelayMinutes).reversed()).collect(Collectors.toList());
     }
 
-    // Getters and Setters
-    public String getFlightId() {
-        // TODO: Return flightId
-        return null;
-    }
-
-    public void setFlightId(String flightId) {
-        // TODO: Set flightId
-    }
-
-    public String getFlightNumber() {
-        // TODO: Return flightNumber
-        return null;
-    }
-
-    public void setFlightNumber(String flightNumber) {
-        // TODO: Set flightNumber
-    }
-
-    public String getAircraftId() {
-        // TODO: Return aircraftId
-        return null;
-    }
-
-    public void setAircraftId(String aircraftId) {
-        // TODO: Set aircraftId
-    }
-
-    public String getOrigin() {
-        // TODO: Return origin
-        return null;
-    }
-
-    public void setOrigin(String origin) {
-        // TODO: Set origin
-    }
-
-    public String getDestination() {
-        // TODO: Return destination
-        return null;
-    }
-
-    public void setDestination(String destination) {
-        // TODO: Set destination
-    }
-
-    public LocalDateTime getScheduledDeparture() {
-        // TODO: Return scheduledDeparture
-        return null;
-    }
-
-    public void setScheduledDeparture(LocalDateTime scheduledDeparture) {
-        // TODO: Set scheduledDeparture
-    }
-
-    public LocalDateTime getScheduledArrival() {
-        // TODO: Return scheduledArrival
-        return null;
-    }
-
-    public void setScheduledArrival(LocalDateTime scheduledArrival) {
-        // TODO: Set scheduledArrival
-    }
-
-    public LocalDateTime getActualDeparture() {
-        // TODO: Return actualDeparture
-        return null;
-    }
-
-    public void setActualDeparture(LocalDateTime actualDeparture) {
-        // TODO: Set actualDeparture
-    }
-
-    public LocalDateTime getActualArrival() {
-        // TODO: Return actualArrival
-        return null;
-    }
-
-    public void setActualArrival(LocalDateTime actualArrival) {
-        // TODO: Set actualArrival
-    }
-
-    public String getStatus() {
-        // TODO: Return status
-        return null;
-    }
-
-    public void setStatus(String status) {
-        // TODO: Set status
-    }
-
-    public int getDelayMinutes() {
-        // TODO: Return delayMinutes
-        return 0;
-    }
-
-    public void setDelayMinutes(int delayMinutes) {
-        // TODO: Set delayMinutes
-    }
-
-    public String getDelayReason() {
-        // TODO: Return delayReason
-        return null;
-    }
-
-    public void setDelayReason(String delayReason) {
-        // TODO: Set delayReason
-    }
-
-    public List<String> getWeatherAlerts() {
-        // TODO: Return weatherAlerts
-        return null;
-    }
-
-    public void setWeatherAlerts(List<String> weatherAlerts) {
-        // TODO: Set weatherAlerts
-    }
-
-    public boolean isAffectedByWeather() {
-        // TODO: Return isAffectedByWeather
-        return false;
-    }
-
-    public void setAffectedByWeather(boolean affectedByWeather) {
-        // TODO: Set isAffectedByWeather
-    }
-
-    // Business Methods
-    public boolean isDelayed() {
-        // TODO: Return delayMinutes > 0
-        return false;
-    }
-
-    public boolean isScheduledToday() {
-        // TODO: Check if scheduled for today
-        return false;
-    }
+    // Getters and setters
+    public String getFlightId() { return flightId; }
+    public void setFlightId(String flightId) { this.flightId = flightId; }
+    
+    public String getFlightNumber() { return flightNumber; }
+    public void setFlightNumber(String flightNumber) { this.flightNumber = flightNumber; }
+    
+    public String getAircraftId() { return aircraftId; }
+    public void setAircraftId(String aircraftId) { this.aircraftId = aircraftId; }
+    
+    public String getOrigin() { return origin; }
+    public void setOrigin(String origin) { this.origin = origin; }
+    
+    public String getDestination() { return destination; }
+    public void setDestination(String destination) { this.destination = destination; }
+    
+    public LocalDateTime getScheduledDeparture() { return scheduledDeparture; }
+    public void setScheduledDeparture(LocalDateTime scheduledDeparture) { this.scheduledDeparture = scheduledDeparture; }
+    
+    public LocalDateTime getScheduledArrival() { return scheduledArrival; }
+    public void setScheduledArrival(LocalDateTime scheduledArrival) { this.scheduledArrival = scheduledArrival; }
+    
+    public LocalDateTime getActualDeparture() { return actualDeparture; }
+    public void setActualDeparture(LocalDateTime actualDeparture) { this.actualDeparture = actualDeparture; }
+    
+    public LocalDateTime getActualArrival() { return actualArrival; }
+    public void setActualArrival(LocalDateTime actualArrival) { this.actualArrival = actualArrival; }
+    
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    
+    public int getDelayMinutes() { return delayMinutes; }
+    public void setDelayMinutes(int delayMinutes) { this.delayMinutes = delayMinutes; }
+    
+    public String getDelayReason() { return delayReason; }
+    public void setDelayReason(String delayReason) { this.delayReason = delayReason; }
+    
+    public List<String> getWeatherAlerts() { return weatherAlerts; }
+    public void setWeatherAlerts(List<String> weatherAlerts) { this.weatherAlerts = weatherAlerts; }
+    
+    public boolean isAffectedByWeather() { return isAffectedByWeather; }
+    public void setAffectedByWeather(boolean affectedByWeather) { this.isAffectedByWeather = affectedByWeather; }
 
     public void addDelay(int minutes, String reason) {
-        // TODO: Add delay and reason
-    }
-
-    public void cancelFlight(String reason) {
-        // TODO: Set status to CANCELLED
-    }
-
-    public Duration getFlightDuration() {
-        // TODO: Calculate flight duration
-        return null;
-    }
-
-    public boolean isDeparted() {
-        // TODO: Check if actualDeparture is set
-        return false;
-    }
-
-    public boolean hasLanded() {
-        // TODO: Check if actualArrival is set
-        return false;
+        this.delayMinutes += minutes;
+        this.delayReason = reason;
+        if ("SCHEDULED".equals(this.status)) {
+            this.status = "DELAYED";
+        }
     }
 
     public void addWeatherAlert(String alertId) {
-        // TODO: Add weather alert to list
+        if (weatherAlerts == null) weatherAlerts = new ArrayList<>();
+        if (!weatherAlerts.contains(alertId)) {
+            weatherAlerts.add(alertId);
+            this.isAffectedByWeather = true;
+        }
     }
 
     @Override
     public String toString() {
-        // TODO: Format: "Flight[FL001: BA101 JFK->LHR, Status: SCHEDULED]"
-        return null;
+        return String.format("Flight[%s: %s %s->%s, Status: %s]", 
+                           flightId, flightNumber, origin, destination, status);
     }
 }

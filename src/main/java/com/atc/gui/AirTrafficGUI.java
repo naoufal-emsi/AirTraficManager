@@ -2,11 +2,14 @@ package com.atc.gui;
 
 import com.atc.part2.controllers.FlightScheduler;
 import com.atc.part2.controllers.WeatherController;
-// TODO: Import LandingController from Part 1 when available
 import com.atc.part2.models.Flight;
 import com.atc.part2.models.WeatherAlert;
-// TODO: Import Aircraft from Part 1 when available
+import com.atc.part2.services.*;
+import com.atc.part2.dao.FlightDAO;
+import com.atc.part2.threads.*;
+import com.atc.shared.database.DatabaseManager;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
@@ -14,160 +17,236 @@ import javafx.scene.layout.HBox;
 import javafx.stage.Stage;
 import javafx.collections.ObservableList;
 import javafx.collections.FXCollections;
+import javafx.animation.Timeline;
+import javafx.animation.KeyFrame;
+import javafx.util.Duration;
+import java.time.LocalDateTime;
+import java.util.Random;
 
 public class AirTrafficGUI extends Application {
-    // Fields
     private FlightScheduler flightScheduler;
     private WeatherController weatherController;
-    private Object landingController;  // TODO: Change to LandingController when Part 1 is ready
-
-    // GUI Components
+    private WeatherService weatherService;
+    private FuelMonitoringService fuelService;
+    private NotificationService notificationService;
+    private WeatherMonitor weatherMonitor;
+    private FuelMonitor fuelMonitor;
+    
     private TableView<Flight> flightTable;
-    private TableView<Object> aircraftTable; // TODO: Change to TableView<Aircraft> when Part 1 is ready
-    private ListView<WeatherAlert> weatherAlertList;
     private ListView<String> logList;
-
-    // Buttons for scenarios
-    private Button scheduleFlight;
-    private Button createWeatherAlert;
-    private Button simulateFuelLow;
-    private Button requestLanding;
-    private Button declareEmergency;
+    private Label statsLabel;
+    private Random random = new Random();
+    private ObservableList<String> logMessages = FXCollections.observableArrayList();
 
     @Override
     public void start(Stage primaryStage) {
-        // TODO: Initialize all controllers
-        // - Create FlightScheduler instance
-        // - Create WeatherController instance
-        // - Create LandingController instance (from Part 1)
-        // - Initialize database connections
-
-        // TODO: Create GUI layout
-        // - Set up main window
-        // - Create tables and lists
-        // - Create buttons
-        // - Set up event handlers
-
-        // TODO: Start background threads
-        // - Start flight processing threads
-        // - Start weather monitoring
-        // - Start fuel monitoring
-        // - Start periodic GUI updates
+        try {
+            DatabaseManager.connect();
+            initializeServices();
+            initializeControllers();
+            startBackgroundThreads();
+            
+            VBox root = createMainLayout();
+            Scene scene = new Scene(root, 1000, 700);
+            
+            primaryStage.setTitle("Air Traffic Manager - Part 2");
+            primaryStage.setScene(scene);
+            primaryStage.show();
+            
+            startPeriodicUpdates();
+            logAction("System started successfully");
+            
+        } catch (Exception e) {
+            showAlert("Error", "Failed to start application: " + e.getMessage());
+        }
     }
 
-    // EVENT HANDLERS
+    private void initializeServices() {
+        notificationService = new NotificationService();
+        FlightDAO flightDAO = new FlightDAO();
+        weatherService = new WeatherService(flightDAO, notificationService);
+        fuelService = new FuelMonitoringService(notificationService);
+    }
+
+    private void initializeControllers() {
+        FlightDAO flightDAO = new FlightDAO();
+        flightScheduler = new FlightScheduler(weatherService, fuelService, notificationService, flightDAO);
+        weatherController = new WeatherController(weatherService, flightScheduler);
+    }
+
+    private void startBackgroundThreads() {
+        weatherMonitor = new WeatherMonitor(weatherService);
+        fuelMonitor = new FuelMonitor(fuelService);
+        
+        new Thread(weatherMonitor).start();
+        new Thread(fuelMonitor).start();
+        flightScheduler.startFlightWorkers();
+        weatherController.startWeatherProcessing();
+    }
+
+    private VBox createMainLayout() {
+        VBox root = new VBox(10);
+        
+        // Title
+        Label title = new Label("Air Traffic Manager - Flight Operations & Weather");
+        title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        
+        // Statistics
+        statsLabel = new Label("Statistics: Loading...");
+        
+        // Buttons
+        HBox buttonBox = createButtonPanel();
+        
+        // Flight table
+        flightTable = createFlightTable();
+        
+        // Log area
+        logList = new ListView<>(logMessages);
+        logList.setPrefHeight(150);
+        
+        root.getChildren().addAll(title, statsLabel, buttonBox, 
+            new Label("Active Flights:"), flightTable,
+            new Label("System Log:"), logList);
+        
+        return root;
+    }
+
+    private HBox createButtonPanel() {
+        Button scheduleBtn = new Button("Schedule Flight");
+        Button weatherBtn = new Button("Create Weather Alert");
+        Button fuelBtn = new Button("Simulate Low Fuel");
+        Button emergencyBtn = new Button("Declare Emergency");
+        Button statsBtn = new Button("Show Statistics");
+        
+        scheduleBtn.setOnAction(e -> handleScheduleFlight());
+        weatherBtn.setOnAction(e -> handleWeatherAlert());
+        fuelBtn.setOnAction(e -> handleFuelAlert());
+        emergencyBtn.setOnAction(e -> handleEmergency());
+        statsBtn.setOnAction(e -> showStatistics());
+        
+        return new HBox(10, scheduleBtn, weatherBtn, fuelBtn, emergencyBtn, statsBtn);
+    }
+
+    private TableView<Flight> createFlightTable() {
+        TableView<Flight> table = new TableView<>();
+        
+        TableColumn<Flight, String> idCol = new TableColumn<>("Flight ID");
+        idCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().getFlightId()));
+        
+        TableColumn<Flight, String> numberCol = new TableColumn<>("Flight Number");
+        numberCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().getFlightNumber()));
+        
+        TableColumn<Flight, String> routeCol = new TableColumn<>("Route");
+        routeCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(
+            data.getValue().getOrigin() + " → " + data.getValue().getDestination()));
+        
+        TableColumn<Flight, String> statusCol = new TableColumn<>("Status");
+        statusCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().getStatus()));
+        
+        TableColumn<Flight, String> delayCol = new TableColumn<>("Delay (min)");
+        delayCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(
+            String.valueOf(data.getValue().getDelayMinutes())));
+        
+        table.getColumns().addAll(idCol, numberCol, routeCol, statusCol, delayCol);
+        table.setPrefHeight(300);
+        
+        return table;
+    }
+
     private void handleScheduleFlight() {
-        // TODO: Create new flight with random data
-        // - Generate random flight number
-        // - Set random origin/destination
-        // - Call flightScheduler.scheduleFlight()
-        // - Update flight table
-        // - Log action
+        String[] origins = {"JFK", "LAX", "LHR", "CDG", "DXB"};
+        String[] destinations = {"JFK", "LAX", "LHR", "CDG", "DXB"};
+        
+        String origin = origins[random.nextInt(origins.length)];
+        String destination = destinations[random.nextInt(destinations.length)];
+        while (destination.equals(origin)) {
+            destination = destinations[random.nextInt(destinations.length)];
+        }
+        
+        String flightId = "FL" + String.format("%03d", random.nextInt(1000));
+        String flightNumber = "AA" + (100 + random.nextInt(900));
+        
+        Flight flight = new Flight(flightId, flightNumber, "AC" + random.nextInt(100), 
+                                 origin, destination, LocalDateTime.now().plusHours(1));
+        
+        flightScheduler.scheduleFlight(flight);
+        updateFlightTable();
+        logAction("Scheduled flight: " + flightNumber + " from " + origin + " to " + destination);
     }
 
     private void handleWeatherAlert() {
-        // TODO: Create weather alert dialog
-        // - Show dialog for weather type selection
-        // - Generate weather alert with user input
-        // - Process affected flights using streams
-        // - Update weather alert list
-        // - Log action
+        String[] types = {"STORM", "FOG", "WIND", "SNOW"};
+        String[] severities = {"LOW", "MEDIUM", "HIGH", "CRITICAL"};
+        String[] airports = {"JFK", "LAX", "LHR", "CDG", "DXB"};
+        
+        String type = types[random.nextInt(types.length)];
+        String severity = severities[random.nextInt(severities.length)];
+        String airport = airports[random.nextInt(airports.length)];
+        
+        WeatherAlert alert = weatherService.createWeatherAlert(type, severity, airport);
+        alert.setDescription(severity + " " + type + " at " + airport);
+        weatherController.processWeatherAlert(alert);
+        
+        updateFlightTable();
+        logAction("Created weather alert: " + alert.getDescription());
     }
 
     private void handleFuelAlert() {
-        // TODO: Select random aircraft and reduce fuel
-        // - Find aircraft with normal fuel
-        // - Reduce fuel level to critical (5-10%)
-        // - Generate fuel alert
-        // - Update aircraft table
-        // - Log action
-    }
-
-    private void handleLandingRequest() {
-        // TODO: Create new aircraft requesting landing
-        // - Generate random aircraft
-        // - Call landingController.requestLanding() (Part 1)
-        // - Update aircraft table
-        // - Log action
+        String aircraftId = "AC" + String.format("%03d", random.nextInt(100));
+        int lowFuel = 5 + random.nextInt(10); // 5-15% fuel
+        
+        fuelService.updateFuelLevel(aircraftId, lowFuel);
+        logAction("Simulated low fuel for aircraft: " + aircraftId + " (" + lowFuel + "%)");
     }
 
     private void handleEmergency() {
-        // TODO: Select aircraft and declare emergency
-        // - Find aircraft in approach or airborne
-        // - Call landingController.declareEmergency() (Part 1)
-        // - Update emergency status in GUI
-        // - Log action
+        String aircraftId = "AC" + String.format("%03d", random.nextInt(100));
+        fuelService.escalateToEmergency(aircraftId);
+        logAction("Declared emergency for aircraft: " + aircraftId);
     }
 
-    // TABLE UPDATE METHODS
+    private void showStatistics() {
+        var stats = flightScheduler.getFlightStatistics();
+        String message = String.format(
+            "Total Flights: %s\nOn-time Percentage: %.1f%%\nAverage Delay: %.1f minutes",
+            stats.get("totalFlights"),
+            stats.get("onTimePercentage"),
+            stats.get("averageDelay")
+        );
+        showAlert("Flight Statistics", message);
+    }
+
     private void updateFlightTable() {
-        // TODO: Refresh flight data using streams
-        // - Get all flights from flightScheduler
-        // - Filter and sort using streams
-        // - Update ObservableList for table
-        // - Refresh table view
+        Platform.runLater(() -> {
+            ObservableList<Flight> flights = FXCollections.observableArrayList(
+                flightScheduler.getActiveFlights().values());
+            flightTable.setItems(flights);
+        });
     }
 
-    private void updateAircraftTable() {
-        // TODO: Refresh aircraft data
-        // - Get all aircraft from database
-        // - Update fuel level displays
-        // - Update status information
-        // - Refresh table view
-    }
-
-    private void updateWeatherAlerts() {
-        // TODO: Refresh weather alerts
-        // - Get active weather alerts
-        // - Update alert list
-        // - Highlight critical alerts
-    }
-
-    private void updateLogMessages() {
-        // TODO: Refresh log messages
-        // - Get recent system events
-        // - Add to log list
-        // - Limit to last 50 messages
-    }
-
-    // BACKGROUND TASKS
     private void startPeriodicUpdates() {
-        // TODO: Schedule GUI updates every 2 seconds
-        // - Create Timeline for periodic updates
-        // - Update all tables with latest data
-        // - Refresh statistics displays
-        // - Handle any GUI exceptions
+        Timeline timeline = new Timeline(new KeyFrame(Duration.seconds(2), e -> {
+            updateFlightTable();
+            updateStatistics();
+        }));
+        timeline.setCycleCount(Timeline.INDEFINITE);
+        timeline.play();
     }
 
-    // TABLE INITIALIZATION
-    private void initializeFlightTable() {
-        // TODO: Set up flight table columns
-        // - Flight ID column
-        // - Flight number column
-        // - Origin/Destination columns
-        // - Status column with color coding
-        // - Delay column with progress bar
+    private void updateStatistics() {
+        Platform.runLater(() -> {
+            var stats = flightScheduler.getFlightStatistics();
+            statsLabel.setText(String.format(
+                "Flights: %s | On-time: %.1f%% | Avg Delay: %.1f min | Active Alerts: %d",
+                stats.get("totalFlights"),
+                stats.get("onTimePercentage"),
+                stats.get("averageDelay"),
+                weatherService.getActiveAlerts().size()
+            ));
+        });
     }
 
-    private void initializeAircraftTable() {
-        // TODO: Set up aircraft table columns
-        // - Aircraft ID column
-        // - Callsign column
-        // - Fuel level column with progress bar
-        // - Status column with color coding
-        // - Emergency flag column
-    }
-
-    private void initializeWeatherAlertList() {
-        // TODO: Set up weather alert list
-        // - Custom cell factory for alert display
-        // - Color coding by severity
-        // - Show affected airports
-    }
-
-    // UTILITY METHODS
     private void showAlert(String title, String message) {
-        // TODO: Show information dialog
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle(title);
         alert.setHeaderText(null);
@@ -176,13 +255,24 @@ public class AirTrafficGUI extends Application {
     }
 
     private void logAction(String action) {
-        // TODO: Log user action to system
-        // - Add to log list
-        // - Save to database
-        // - Update log display
+        Platform.runLater(() -> {
+            String timestamp = java.time.LocalTime.now().toString().substring(0, 8);
+            logMessages.add(0, "[" + timestamp + "] " + action);
+            if (logMessages.size() > 50) {
+                logMessages.remove(50, logMessages.size());
+            }
+        });
     }
 
-    // MAIN METHOD
+    @Override
+    public void stop() {
+        if (weatherMonitor != null) weatherMonitor.stop();
+        if (fuelMonitor != null) fuelMonitor.stop();
+        if (flightScheduler != null) flightScheduler.shutdown();
+        if (weatherController != null) weatherController.shutdown();
+        DatabaseManager.disconnect();
+    }
+
     public static void main(String[] args) {
         launch(args);
     }

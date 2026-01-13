@@ -1,67 +1,84 @@
 package com.atc.part2.threads;
 
 import com.atc.part2.services.FuelMonitoringService;
-// TODO: Import Aircraft class from Part 1 when available
-import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.Random;
+import java.util.List;
+import java.util.ArrayList;
 
 public class FuelMonitor implements Runnable {
-    // Fields
     private final FuelMonitoringService fuelService;
-    private final List<Object> monitoredAircraft; // TODO: Change to List<Aircraft> when Part 1 is ready
     private final ScheduledExecutorService scheduler;
     private volatile boolean running;
+    private final Random random;
+    private final List<String> monitoredAircraft;
 
-    // Constructor
-    public FuelMonitor(FuelMonitoringService fuelService, List<Object> aircraft) {
-        // TODO: Initialize all fields
-        this.fuelService = null;
-        this.monitoredAircraft = null;
-        this.scheduler = null;
+    public FuelMonitor(FuelMonitoringService fuelService) {
+        this.fuelService = fuelService;
+        this.scheduler = Executors.newScheduledThreadPool(1);
+        this.running = true;
+        this.random = new Random();
+        this.monitoredAircraft = new ArrayList<>();
+        initializeAircraft();
     }
 
-    // Thread Methods
     @Override
     public void run() {
-        // TODO: Monitors fuel every 10 seconds
-        // - Check all aircraft fuel levels
-        // - Generate alerts for low fuel
-        // - Escalate emergencies
-        // - Simulate fuel consumption
+        scheduler.scheduleAtFixedRate(() -> {
+            if (running) {
+                checkFuelLevels();
+                simulateFuelConsumption();
+                escalateEmergencies();
+            }
+        }, 0, 10, TimeUnit.SECONDS);
     }
 
     public void stop() {
-        // TODO: Graceful shutdown
-        // - Set running = false
-        // - Shutdown scheduler
+        running = false;
+        scheduler.shutdown();
     }
 
-    // Business Methods
+    public void addAircraft(String aircraftId, int initialFuel) {
+        monitoredAircraft.add(aircraftId);
+        fuelService.updateFuelLevel(aircraftId, initialFuel);
+    }
+
+    private void initializeAircraft() {
+        // Initialize some test aircraft
+        addAircraft("AC001", 75);
+        addAircraft("AC002", 15);
+        addAircraft("AC003", 5);
+        addAircraft("AC004", 85);
+        addAircraft("AC005", 45);
+    }
+
     private void checkFuelLevels() {
-        // TODO: Check all aircraft fuel levels
-        // - Iterate through monitored aircraft
-        // - Check fuel thresholds
-        // - Generate alerts as needed
-    }
-
-    private void generateFuelAlert(Object aircraft) { // TODO: Change to Aircraft when available
-        // TODO: Create fuel alert for aircraft
-        // - Determine alert level
-        // - Create FuelAlert object
-        // - Save to database
+        fuelService.checkAllFuelThresholds();
+        fuelService.processLowFuelAircraft();
     }
 
     private void simulateFuelConsumption() {
-        // TODO: Decrease fuel levels over time
-        // - Reduce fuel for in-flight aircraft
-        // - Simulate realistic consumption rates
-        // - Update aircraft fuel levels
+        monitoredAircraft.forEach(aircraftId -> {
+            if (random.nextDouble() < 0.7) { // 70% chance to consume fuel
+                int currentFuel = getCurrentFuelLevel(aircraftId);
+                int consumption = random.nextInt(3) + 1; // 1-3% consumption
+                int newFuel = Math.max(0, currentFuel - consumption);
+                fuelService.updateFuelLevel(aircraftId, newFuel);
+            }
+        });
     }
 
     private void escalateEmergencies() {
-        // TODO: Handle critical fuel situations
-        // - Find aircraft with critical fuel
-        // - Escalate to emergency status
-        // - Notify Part 1 emergency system
+        fuelService.getCriticalFuelAircraft().forEach(aircraftId -> {
+            fuelService.escalateToEmergency(aircraftId);
+            System.out.println("[FUEL MONITOR] Emergency escalated for aircraft: " + aircraftId);
+        });
+    }
+
+    private int getCurrentFuelLevel(String aircraftId) {
+        // Simulate getting current fuel level
+        return random.nextInt(100);
     }
 }
