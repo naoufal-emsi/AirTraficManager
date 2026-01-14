@@ -1,5 +1,6 @@
 package com.atc.gui;
 
+import com.atc.AirTrafficSystem;
 import com.atc.part2.controllers.FlightScheduler;
 import com.atc.part2.controllers.WeatherController;
 import com.atc.part2.models.Flight;
@@ -26,6 +27,8 @@ import java.util.Random;
 public class AirTrafficGUI extends Application {
     private FlightScheduler flightScheduler;
     private WeatherController weatherController;
+    private com.atc.part1.controllers.LandingController landingController;
+    private com.atc.part1.managers.RunwayManager runwayManager;
     private WeatherService weatherService;
     private FuelMonitoringService fuelService;
     private NotificationService notificationService;
@@ -33,6 +36,7 @@ public class AirTrafficGUI extends Application {
     private FuelMonitor fuelMonitor;
     
     private TableView<Flight> flightTable;
+    private TableView<com.atc.part1.models.Aircraft> aircraftTable;
     private ListView<String> logList;
     private Label statsLabel;
     private Random random = new Random();
@@ -70,16 +74,21 @@ public class AirTrafficGUI extends Application {
 
     private void initializeControllers() {
         FlightDAO flightDAO = new FlightDAO();
+        runwayManager = new com.atc.part1.managers.RunwayManager();
+        com.atc.part1.managers.ResourceManager resourceManager = new com.atc.part1.managers.ResourceManager();
+        landingController = new com.atc.part1.controllers.LandingController(runwayManager, resourceManager);
         flightScheduler = new FlightScheduler(weatherService, fuelService, notificationService, flightDAO);
         weatherController = new WeatherController(weatherService, flightScheduler);
     }
 
     private void startBackgroundThreads() {
+        landingController.startLandingWorkers();
         weatherMonitor = new WeatherMonitor(weatherService);
         fuelMonitor = new FuelMonitor(fuelService);
         
         new Thread(weatherMonitor).start();
         new Thread(fuelMonitor).start();
+        new Thread(new com.atc.part1.threads.RunwayMonitor(runwayManager)).start();
         flightScheduler.startFlightWorkers();
         weatherController.startWeatherProcessing();
     }
@@ -87,25 +96,22 @@ public class AirTrafficGUI extends Application {
     private VBox createMainLayout() {
         VBox root = new VBox(10);
         
-        // Title
-        Label title = new Label("Air Traffic Manager - Flight Operations & Weather");
+        Label title = new Label("Air Traffic Manager - Complete System");
         title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
         
-        // Statistics
         statsLabel = new Label("Statistics: Loading...");
         
-        // Buttons
         HBox buttonBox = createButtonPanel();
         
-        // Flight table
         flightTable = createFlightTable();
+        aircraftTable = createAircraftTable();
         
-        // Log area
         logList = new ListView<>(logMessages);
         logList.setPrefHeight(150);
         
         root.getChildren().addAll(title, statsLabel, buttonBox, 
             new Label("Active Flights:"), flightTable,
+            new Label("Aircraft:"), aircraftTable,
             new Label("System Log:"), logList);
         
         return root;
@@ -115,16 +121,18 @@ public class AirTrafficGUI extends Application {
         Button scheduleBtn = new Button("Schedule Flight");
         Button weatherBtn = new Button("Create Weather Alert");
         Button fuelBtn = new Button("Simulate Low Fuel");
+        Button landingBtn = new Button("Request Landing");
         Button emergencyBtn = new Button("Declare Emergency");
         Button statsBtn = new Button("Show Statistics");
         
         scheduleBtn.setOnAction(e -> handleScheduleFlight());
         weatherBtn.setOnAction(e -> handleWeatherAlert());
         fuelBtn.setOnAction(e -> handleFuelAlert());
+        landingBtn.setOnAction(e -> handleLandingRequest());
         emergencyBtn.setOnAction(e -> handleEmergency());
         statsBtn.setOnAction(e -> showStatistics());
         
-        return new HBox(10, scheduleBtn, weatherBtn, fuelBtn, emergencyBtn, statsBtn);
+        return new HBox(10, scheduleBtn, weatherBtn, fuelBtn, landingBtn, emergencyBtn, statsBtn);
     }
 
     private TableView<Flight> createFlightTable() {
@@ -202,6 +210,7 @@ public class AirTrafficGUI extends Application {
     private void handleEmergency() {
         String aircraftId = "AC" + String.format("%03d", random.nextInt(100));
         fuelService.escalateToEmergency(aircraftId);
+        landingController.declareEmergency(aircraftId);
         logAction("Declared emergency for aircraft: " + aircraftId);
     }
 
@@ -227,6 +236,7 @@ public class AirTrafficGUI extends Application {
     private void startPeriodicUpdates() {
         Timeline timeline = new Timeline(new KeyFrame(Duration.seconds(2), e -> {
             updateFlightTable();
+            updateAircraftTable();
             updateStatistics();
         }));
         timeline.setCycleCount(Timeline.INDEFINITE);
@@ -264,12 +274,60 @@ public class AirTrafficGUI extends Application {
         });
     }
 
+    private TableView<com.atc.part1.models.Aircraft> createAircraftTable() {
+        TableView<com.atc.part1.models.Aircraft> table = new TableView<>();
+        
+        TableColumn<com.atc.part1.models.Aircraft, String> idCol = new TableColumn<>("Aircraft ID");
+        idCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().getAircraftId()));
+        
+        TableColumn<com.atc.part1.models.Aircraft, String> callsignCol = new TableColumn<>("Callsign");
+        callsignCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().getCallsign()));
+        
+        TableColumn<com.atc.part1.models.Aircraft, String> fuelCol = new TableColumn<>("Fuel %");
+        fuelCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(String.valueOf(data.getValue().getFuelLevel())));
+        
+        TableColumn<com.atc.part1.models.Aircraft, String> statusCol = new TableColumn<>("Status");
+        statusCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(data.getValue().getStatus()));
+        
+        TableColumn<com.atc.part1.models.Aircraft, String> runwayCol = new TableColumn<>("Runway");
+        runwayCol.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(
+            data.getValue().getAssignedRunway() != null ? data.getValue().getAssignedRunway() : "-"));
+        
+        table.getColumns().addAll(idCol, callsignCol, fuelCol, statusCol, runwayCol);
+        table.setPrefHeight(200);
+        
+        return table;
+    }
+
+    private void handleLandingRequest() {
+        String aircraftId = "AC" + String.format("%03d", random.nextInt(1000));
+        String callsign = "FL" + (100 + random.nextInt(900));
+        int fuel = 50 + random.nextInt(50);
+        
+        com.atc.part1.models.Aircraft aircraft = new com.atc.part1.models.Aircraft(aircraftId, callsign, fuel);
+        landingController.requestLanding(aircraft);
+        
+        updateAircraftTable();
+        logAction("Landing requested for " + callsign + " (Fuel: " + fuel + "%)");
+    }
+
+    private void updateAircraftTable() {
+        if (AirTrafficSystem.getResourceManager() != null) {
+            Platform.runLater(() -> {
+                ObservableList<com.atc.part1.models.Aircraft> aircraft = FXCollections.observableArrayList(
+                    AirTrafficSystem.getResourceManager().getActiveAircraft().values());
+                aircraftTable.setItems(aircraft);
+            });
+        }
+    }
+
     @Override
     public void stop() {
         if (weatherMonitor != null) weatherMonitor.stop();
         if (fuelMonitor != null) fuelMonitor.stop();
         if (flightScheduler != null) flightScheduler.shutdown();
         if (weatherController != null) weatherController.shutdown();
+        if (landingController != null) landingController.shutdown();
         DatabaseManager.disconnect();
     }
 

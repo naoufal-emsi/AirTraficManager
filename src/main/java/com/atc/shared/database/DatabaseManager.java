@@ -1,6 +1,7 @@
 package com.atc.shared.database;
 
-import com.mongodb.MongoClient;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.MongoCollection;
 import org.bson.Document;
@@ -28,7 +29,7 @@ public class DatabaseManager {
     public static void connect() {
         DatabaseManager manager = getInstance();
         try {
-            manager.mongoClient = new MongoClient("localhost", 27017);
+            manager.mongoClient = MongoClients.create(CONNECTION_STRING);
             manager.database = manager.mongoClient.getDatabase(DATABASE_NAME);
             manager.isConnected = true;
             System.out.println("✅ Connected to MongoDB: " + DATABASE_NAME);
