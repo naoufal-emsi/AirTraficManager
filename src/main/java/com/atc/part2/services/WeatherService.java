@@ -102,10 +102,10 @@ public class WeatherService {
 
     private int calculateDelayBySeverity(String severity) {
         return switch (severity) {
-            case "LOW" -> 15;
-            case "MEDIUM" -> 30;
-            case "HIGH" -> 60;
-            case "CRITICAL" -> 120;
+            case "LOW" -> 30;      // 30 min - minor delays
+            case "MEDIUM" -> 90;   // 1.5 hours - moderate impact
+            case "HIGH" -> 180;    // 3 hours - severe weather
+            case "CRITICAL" -> 360; // 6 hours - airport closure
             default -> 0;
         };
     }

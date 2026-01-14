@@ -60,6 +60,10 @@ public class FuelMonitoringService {
             .collect(Collectors.toList());
     }
 
+    public int getFuelLevel(String aircraftId) {
+        return aircraftFuelLevels.getOrDefault(aircraftId, 0);
+    }
+
     public void updateFuelLevel(String aircraftId, int fuelLevel) {
         int oldLevel = aircraftFuelLevels.getOrDefault(aircraftId, 100);
         aircraftFuelLevels.put(aircraftId, fuelLevel);

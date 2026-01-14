@@ -108,6 +108,7 @@ public class AirTrafficSystem {
     public static LandingController getLandingController() { return landingController; }
     public static RunwayManager getRunwayManager() { return runwayManager; }
     public static ResourceManager getResourceManager() { return resourceManager; }
+    public static void setResourceManager(ResourceManager rm) { resourceManager = rm; }
     public static FlightScheduler getFlightScheduler() { return flightScheduler; }
     public static WeatherController getWeatherController() { return weatherController; }
     public static WeatherService getWeatherService() { return weatherService; }

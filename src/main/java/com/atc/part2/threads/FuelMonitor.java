@@ -78,7 +78,7 @@ public class FuelMonitor implements Runnable {
     }
 
     private int getCurrentFuelLevel(String aircraftId) {
-        // Simulate getting current fuel level
-        return random.nextInt(100);
+        // Get actual fuel level from service
+        return fuelService.getFuelLevel(aircraftId);
     }
 }
