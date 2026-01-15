@@ -1,5 +1,6 @@
 package com.atc.core.models;
 
+import com.atc.core.SimulationConfig;
 import java.time.LocalDateTime;
 
 public class Aircraft {
@@ -8,76 +9,112 @@ public class Aircraft {
 
     private String id;
     private String callsign;
-    private double fuelLevel;
+    private volatile double fuelLevel;
     private double fuelBurnRate;
-    private int speed;
-    private double distanceToAirport;
-    private LocalDateTime eta;
-    private Status status;
-    private EmergencyType emergencyType;
-    private int priority;
-    private String assignedRunway;
-    private LocalDateTime lastStateChange;
+    private volatile double speedMetersPerSecond;
+    private volatile double distanceToAirportMeters;
+    private volatile LocalDateTime eta;
+    private volatile Status status;
+    private volatile EmergencyType emergencyType;
+    private volatile int priority;
+    private volatile String assignedRunway;
+    private volatile LocalDateTime lastStateChange;
     private String origin;
     private String destination;
+    private SimulationConfig config;
 
-    public Aircraft(String callsign, double fuelLevel, int speed, double distance, String origin, String destination) {
+    public Aircraft(String callsign, double fuelLevel, double speedMetersPerSecond, double distanceMeters, 
+                   String origin, String destination, SimulationConfig config) {
         this.id = java.util.UUID.randomUUID().toString();
         this.callsign = callsign;
         this.fuelLevel = fuelLevel;
-        this.speed = speed;
-        this.distanceToAirport = distance;
+        this.speedMetersPerSecond = speedMetersPerSecond;
+        this.distanceToAirportMeters = distanceMeters;
         this.origin = origin;
         this.destination = destination;
+        this.config = config;
         this.status = Status.APPROACHING;
         this.emergencyType = EmergencyType.NONE;
         this.priority = 100;
-        this.fuelBurnRate = 0.5 + Math.random() * 0.5;
+        this.fuelBurnRate = 800.0 + Math.random() * 400.0;
         this.lastStateChange = LocalDateTime.now();
         calculateETA();
     }
 
-    public void updatePosition(double timeElapsed) {
-        distanceToAirport -= (speed * timeElapsed / 3600.0);
-        fuelLevel -= (fuelBurnRate * timeElapsed / 60.0);
-        if (distanceToAirport < 0) distanceToAirport = 0;
-        if (fuelLevel < 0) fuelLevel = 0;
+    public Aircraft(String callsign, AircraftType type, FlightPlan plan) {
+        this.id = java.util.UUID.randomUUID().toString();
+        this.callsign = callsign;
+        this.fuelLevel = plan.calculateFuelRequired(type);
+        this.speedMetersPerSecond = type.getCruiseSpeedMs();
+        this.distanceToAirportMeters = plan.getTotalDistanceKm() * 1000;
+        this.origin = plan.getOrigin();
+        this.destination = plan.getDestination();
+        this.config = new SimulationConfig(1000, 1, type.getFuelBurnRateKgPerSecond() * 3600, 30, 120);
+        this.status = Status.APPROACHING;
+        this.emergencyType = EmergencyType.NONE;
+        this.priority = 100;
+        this.fuelBurnRate = type.getFuelBurnRateKgPerSecond() * 3600;
+        this.lastStateChange = LocalDateTime.now();
         calculateETA();
-        checkFuelStatus();
+    }
+
+    public synchronized void updateState() {
+        updatePosition(1.0);
+        checkAndEscalateFuelStatus();
+    }
+
+    public synchronized void updatePosition(double timeElapsedSeconds) {
+        double distanceTraveled = config.calculateDistanceTraveled(speedMetersPerSecond, timeElapsedSeconds);
+        double fuelBurned = config.calculateFuelBurned(fuelBurnRate, timeElapsedSeconds);
+        
+        distanceToAirportMeters = Math.max(0, distanceToAirportMeters - distanceTraveled);
+        fuelLevel = Math.max(0, fuelLevel - fuelBurned);
+        
+        calculateETA();
     }
 
     private void calculateETA() {
-        if (speed > 0 && distanceToAirport > 0) {
-            double hoursToArrival = distanceToAirport / speed;
-            eta = LocalDateTime.now().plusMinutes((long)(hoursToArrival * 60));
+        if (speedMetersPerSecond > 0 && distanceToAirportMeters > 0) {
+            double secondsToArrival = config.calculateETA(distanceToAirportMeters, speedMetersPerSecond);
+            eta = LocalDateTime.now().plusSeconds((long)secondsToArrival);
         } else {
             eta = LocalDateTime.now();
         }
     }
 
-    private void checkFuelStatus() {
-        double fuelNeeded = (distanceToAirport / speed) * fuelBurnRate * 60 + 30;
-        if (emergencyType == EmergencyType.NONE && fuelLevel < fuelNeeded * 1.2) {
+    public boolean checkAndEscalateFuelStatus() {
+        if (speedMetersPerSecond <= 0 || distanceToAirportMeters <= 0) return false;
+        
+        double fuelNeeded = config.calculateFuelNeeded(distanceToAirportMeters, speedMetersPerSecond, fuelBurnRate);
+        
+        if (emergencyType == EmergencyType.NONE && config.isFuelLow(fuelLevel, fuelNeeded)) {
             escalateToFuelLow();
-        } else if (emergencyType == EmergencyType.FUEL_LOW && fuelLevel < fuelNeeded * 1.05) {
+            return true;
+        } else if (emergencyType == EmergencyType.FUEL_LOW && config.isFuelCritical(fuelLevel, fuelNeeded)) {
             escalateToFuelCritical();
+            return true;
+        }
+        return false;
+    }
+
+    public synchronized void escalateToFuelLow() {
+        if (emergencyType == EmergencyType.NONE) {
+            emergencyType = EmergencyType.FUEL_LOW;
+            priority = 50;
+            speedMetersPerSecond *= 0.9;
+            lastStateChange = LocalDateTime.now();
         }
     }
 
-    public void escalateToFuelLow() {
-        emergencyType = EmergencyType.FUEL_LOW;
-        priority = 50;
-        speed = (int)(speed * 0.9);
-        lastStateChange = LocalDateTime.now();
+    public synchronized void escalateToFuelCritical() {
+        if (emergencyType == EmergencyType.FUEL_LOW || emergencyType == EmergencyType.NONE) {
+            emergencyType = EmergencyType.FUEL_CRITICAL;
+            priority = 10;
+            lastStateChange = LocalDateTime.now();
+        }
     }
 
-    public void escalateToFuelCritical() {
-        emergencyType = EmergencyType.FUEL_CRITICAL;
-        priority = 10;
-        lastStateChange = LocalDateTime.now();
-    }
-
-    public void declareEmergency(EmergencyType type) {
+    public synchronized void declareEmergency(EmergencyType type) {
         this.emergencyType = type;
         switch(type) {
             case FIRE: priority = 1; break;
@@ -97,13 +134,12 @@ public class Aircraft {
                (emergencyType == EmergencyType.MEDICAL && priority < 10);
     }
 
-    // Getters
     public String getId() { return id; }
     public String getCallsign() { return callsign; }
     public double getFuelLevel() { return fuelLevel; }
     public double getFuelBurnRate() { return fuelBurnRate; }
-    public int getSpeed() { return speed; }
-    public double getDistanceToAirport() { return distanceToAirport; }
+    public double getSpeed() { return speedMetersPerSecond; }
+    public double getDistanceToAirport() { return distanceToAirportMeters; }
     public LocalDateTime getEta() { return eta; }
     public Status getStatus() { return status; }
     public Status getCurrentStatus() { return status; }
@@ -115,14 +151,14 @@ public class Aircraft {
     public String getDestination() { return destination; }
     public boolean isEmergency() { return emergencyType != EmergencyType.NONE; }
 
-    // Setters
-    public void setFuelLevel(double fuelLevel) { this.fuelLevel = fuelLevel; }
-    public void setSpeed(int speed) { this.speed = speed; }
-    public void setStatus(Status status) { this.status = status; this.lastStateChange = LocalDateTime.now(); }
+    public synchronized void setFuelLevel(double fuelLevel) { this.fuelLevel = fuelLevel; }
+    public synchronized void setSpeed(double speed) { this.speedMetersPerSecond = speed; }
+    public synchronized void setStatus(Status status) { this.status = status; this.lastStateChange = LocalDateTime.now(); }
     public void setCurrentStatus(Status status) { setStatus(status); }
-    public void setEmergencyType(EmergencyType type) { this.emergencyType = type; }
-    public void setPriority(int priority) { this.priority = priority; }
-    public void setAssignedRunway(String runway) { this.assignedRunway = runway; this.lastStateChange = LocalDateTime.now(); }
+    public synchronized void setEmergencyType(EmergencyType type) { this.emergencyType = type; }
+    public synchronized void setPriority(int priority) { this.priority = priority; }
+    public synchronized void setAssignedRunway(String runway) { this.assignedRunway = runway; this.lastStateChange = LocalDateTime.now(); }
     public void setLastStateChange(LocalDateTime time) { this.lastStateChange = time; }
     public void setEmergency(boolean emergency) { if (emergency && emergencyType == EmergencyType.NONE) emergencyType = EmergencyType.FUEL_CRITICAL; }
+    public void setDistanceToAirport(double distance) { this.distanceToAirportMeters = distance; }
 }

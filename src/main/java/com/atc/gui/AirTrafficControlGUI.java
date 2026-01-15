@@ -2,6 +2,7 @@ package com.atc.gui;
 
 import com.atc.core.models.Aircraft;
 import com.atc.core.models.Runway;
+import com.atc.core.SimulationConfig;
 import com.atc.controllers.EmergencyController;
 import com.atc.utils.AircraftGenerator;
 import javax.swing.*;
@@ -16,6 +17,7 @@ public class AirTrafficControlGUI extends JFrame {
     private final List<Runway> runways;
     private final EmergencyController emergencyController;
     private final PriorityBlockingQueue<Aircraft> landingQueue;
+    private SimulationConfig config;
     
     private DefaultTableModel aircraftTableModel;
     private DefaultTableModel runwayTableModel;
@@ -26,11 +28,13 @@ public class AirTrafficControlGUI extends JFrame {
     private JLabel statsLabel;
     private Aircraft selectedAircraft;
 
-    public AirTrafficControlGUI(List<Aircraft> aircraft, List<Runway> runways, EmergencyController controller, PriorityBlockingQueue<Aircraft> queue) {
+    public AirTrafficControlGUI(List<Aircraft> aircraft, List<Runway> runways, EmergencyController controller, 
+                                PriorityBlockingQueue<Aircraft> queue, SimulationConfig config) {
         this.activeAircraft = aircraft;
         this.runways = runways;
         this.emergencyController = controller;
         this.landingQueue = queue;
+        this.config = config;
         
         setTitle("Air Traffic Control System");
         setSize(1600, 1000);
@@ -70,10 +74,14 @@ public class AirTrafficControlGUI extends JFrame {
         JButton addAircraftBtn = new JButton("Add Aircraft");
         addAircraftBtn.addActionListener(e -> addRandomAircraft());
         
+        JButton restartBtn = new JButton("Restart Simulation");
+        restartBtn.addActionListener(e -> showRestartDialog());
+        
         JButton clearLogBtn = new JButton("Clear Log");
         clearLogBtn.addActionListener(e -> logArea.setText(""));
         
         panel.add(addAircraftBtn);
+        panel.add(restartBtn);
         panel.add(clearLogBtn);
         
         return panel;
@@ -129,8 +137,14 @@ public class AirTrafficControlGUI extends JFrame {
         selectedAircraftInfo.setFont(new Font("Monospaced", Font.PLAIN, 12));
         panel.add(new JScrollPane(selectedAircraftInfo), BorderLayout.CENTER);
         
-        JPanel buttonPanel = new JPanel(new GridLayout(3, 2, 5, 5));
+        JPanel buttonPanel = new JPanel(new GridLayout(4, 2, 5, 5));
         buttonPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        
+        JButton statusApproachingBtn = new JButton("APPROACHING");
+        statusApproachingBtn.addActionListener(e -> changeStatus(Aircraft.Status.APPROACHING));
+        
+        JButton statusHoldingBtn = new JButton("HOLDING");
+        statusHoldingBtn.addActionListener(e -> changeStatus(Aircraft.Status.HOLDING));
         
         JButton fuelLowBtn = new JButton("FUEL_LOW");
         fuelLowBtn.addActionListener(e -> triggerScenario(Aircraft.EmergencyType.FUEL_LOW));
@@ -147,15 +161,17 @@ public class AirTrafficControlGUI extends JFrame {
         JButton securityBtn = new JButton("SECURITY");
         securityBtn.addActionListener(e -> triggerScenario(Aircraft.EmergencyType.SECURITY));
         
-        JButton weatherBtn = new JButton("WEATHER_STORM");
-        weatherBtn.addActionListener(e -> triggerScenario(Aircraft.EmergencyType.WEATHER_STORM));
+        JButton clearEmergencyBtn = new JButton("Clear Emergency");
+        clearEmergencyBtn.addActionListener(e -> clearEmergency());
         
+        buttonPanel.add(statusApproachingBtn);
+        buttonPanel.add(statusHoldingBtn);
         buttonPanel.add(fuelLowBtn);
         buttonPanel.add(fuelCriticalBtn);
         buttonPanel.add(medicalBtn);
         buttonPanel.add(fireBtn);
         buttonPanel.add(securityBtn);
-        buttonPanel.add(weatherBtn);
+        buttonPanel.add(clearEmergencyBtn);
         
         panel.add(buttonPanel, BorderLayout.SOUTH);
         
@@ -205,9 +221,78 @@ public class AirTrafficControlGUI extends JFrame {
     }
 
     private void addRandomAircraft() {
-        Aircraft aircraft = AircraftGenerator.generateRandomAircraft();
+        Aircraft aircraft = AircraftGenerator.generateRandomAircraft(config);
         com.atc.AirTrafficSystem.addAircraft(aircraft);
         log("New aircraft added: " + aircraft.getCallsign());
+    }
+    
+    private void showRestartDialog() {
+        JPanel panel = new JPanel(new GridLayout(5, 2, 5, 5));
+        
+        JTextField metersField = new JTextField(String.valueOf(config.getMetersPerTimeUnit()));
+        JTextField timeStepField = new JTextField(String.valueOf(config.getTimeStepSeconds()));
+        JTextField fuelBurnField = new JTextField(String.valueOf(config.getFuelBurnRatePerHour()));
+        JTextField reserveField = new JTextField(String.valueOf(config.getFuelReserveMinutes()));
+        JTextField landingField = new JTextField(String.valueOf(config.getLandingDurationSeconds()));
+        
+        panel.add(new JLabel("Meters per Time Unit:"));
+        panel.add(metersField);
+        panel.add(new JLabel("Time Step (seconds):"));
+        panel.add(timeStepField);
+        panel.add(new JLabel("Fuel Burn Rate (kg/h):"));
+        panel.add(fuelBurnField);
+        panel.add(new JLabel("Fuel Reserve (minutes):"));
+        panel.add(reserveField);
+        panel.add(new JLabel("Landing Duration (seconds):"));
+        panel.add(landingField);
+        
+        int result = JOptionPane.showConfirmDialog(this, panel, "Restart Simulation", 
+            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        
+        if (result == JOptionPane.OK_OPTION) {
+            try {
+                double meters = Double.parseDouble(metersField.getText());
+                double timeStep = Double.parseDouble(timeStepField.getText());
+                double fuelBurn = Double.parseDouble(fuelBurnField.getText());
+                double reserve = Double.parseDouble(reserveField.getText());
+                double landing = Double.parseDouble(landingField.getText());
+                
+                com.atc.core.SimulationConfig newConfig = new com.atc.core.SimulationConfig(
+                    meters, timeStep, fuelBurn, reserve, landing);
+                this.config = newConfig;
+                com.atc.AirTrafficSystem.restartSimulation(newConfig);
+                log("Simulation restarted with new parameters");
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(this, "Invalid input values", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+    
+    private void changeStatus(Aircraft.Status newStatus) {
+        if (selectedAircraft == null) {
+            JOptionPane.showMessageDialog(this, "Please select an aircraft first", "No Selection", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (selectedAircraft.getStatus() == Aircraft.Status.LANDED) {
+            JOptionPane.showMessageDialog(this, "Aircraft has already landed", "Invalid Selection", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        selectedAircraft.setStatus(newStatus);
+        log("STATUS CHANGED: " + selectedAircraft.getCallsign() + " -> " + newStatus);
+        updateDisplay();
+    }
+    
+    private void clearEmergency() {
+        if (selectedAircraft == null) {
+            JOptionPane.showMessageDialog(this, "Please select an aircraft first", "No Selection", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        selectedAircraft.setEmergencyType(Aircraft.EmergencyType.NONE);
+        selectedAircraft.setPriority(100);
+        landingQueue.remove(selectedAircraft);
+        landingQueue.offer(selectedAircraft);
+        log("EMERGENCY CLEARED: " + selectedAircraft.getCallsign());
+        updateDisplay();
     }
     
     private void triggerScenario(Aircraft.EmergencyType type) {
@@ -220,6 +305,8 @@ public class AirTrafficControlGUI extends JFrame {
             return;
         }
         emergencyController.declareEmergency(selectedAircraft, type);
+        landingQueue.remove(selectedAircraft);
+        landingQueue.offer(selectedAircraft);
         log("SCENARIO TRIGGERED: " + selectedAircraft.getCallsign() + " - " + type);
     }
     
@@ -236,8 +323,8 @@ public class AirTrafficControlGUI extends JFrame {
         info.append("Priority: ").append(selectedAircraft.getPriority()).append("\n");
         info.append("Assigned Runway: ").append(selectedAircraft.getAssignedRunway() != null ? selectedAircraft.getAssignedRunway() : "N/A").append("\n");
         info.append("Emergency Type: ").append(selectedAircraft.getEmergencyType()).append("\n");
-        info.append("Speed: ").append(selectedAircraft.getSpeed()).append(" knots\n");
-        info.append("Distance: ").append(String.format("%.2f", selectedAircraft.getDistanceToAirport())).append(" nm\n");
+        info.append("Speed: ").append(String.format("%.2f", selectedAircraft.getSpeed())).append(" m/s\n");
+        info.append("Distance: ").append(String.format("%.2f", selectedAircraft.getDistanceToAirport())).append(" m\n");
         selectedAircraftInfo.setText(info.toString());
     }
 
@@ -257,8 +344,8 @@ public class AirTrafficControlGUI extends JFrame {
             aircraftTableModel.addRow(new Object[]{
                 aircraft.getCallsign(),
                 String.format("%.1f", aircraft.getFuelLevel()),
-                aircraft.getSpeed(),
-                String.format("%.1f nm", aircraft.getDistanceToAirport()),
+                String.format("%.1f m/s", aircraft.getSpeed()),
+                String.format("%.1f m", aircraft.getDistanceToAirport()),
                 aircraft.getStatus(),
                 aircraft.getEmergencyType(),
                 aircraft.getPriority(),

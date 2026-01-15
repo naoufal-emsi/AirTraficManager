@@ -21,6 +21,37 @@ public class DatabaseManager {
         return instance;
     }
 
+    public void createAircraft(String callsign, String aircraftType, double fuelLevel, double speed, double distance, String origin, String destination) {
+        MongoCollection<Document> collection = database.getCollection("aircraft_templates");
+        Document doc = new Document("callsign", callsign)
+            .append("aircraftType", aircraftType)
+            .append("fuel", fuelLevel)
+            .append("speed", speed)
+            .append("distance", distance)
+            .append("origin", origin)
+            .append("destination", destination)
+            .append("status", "APPROACHING")
+            .append("emergency", "NONE")
+            .append("priority", 100)
+            .append("created", new Date());
+        collection.insertOne(doc);
+    }
+
+    public List<Document> getAllAircraftTemplates() {
+        MongoCollection<Document> collection = database.getCollection("aircraft_templates");
+        return collection.find().into(new ArrayList<>());
+    }
+
+    public Document getAircraftTemplate(String callsign) {
+        MongoCollection<Document> collection = database.getCollection("aircraft_templates");
+        return collection.find(new Document("callsign", callsign)).first();
+    }
+
+    public void deleteAircraftTemplate(String callsign) {
+        MongoCollection<Document> collection = database.getCollection("aircraft_templates");
+        collection.deleteOne(new Document("callsign", callsign));
+    }
+
     public void saveAircraft(Aircraft aircraft) {
         MongoCollection<Document> collection = database.getCollection("aircraft");
         Document doc = new Document("callsign", aircraft.getCallsign())
@@ -62,6 +93,44 @@ public class DatabaseManager {
             .append("affectedRunways", affectedRunways)
             .append("timestamp", new Date());
         collection.insertOne(doc);
+    }
+
+    public List<Document> getAircraftHistory(String callsign) {
+        MongoCollection<Document> collection = database.getCollection("aircraft");
+        return collection.find(new Document("callsign", callsign))
+            .sort(new Document("timestamp", -1)).into(new ArrayList<>());
+    }
+
+    public List<Document> getRunwayEvents(String runwayId) {
+        MongoCollection<Document> collection = database.getCollection("runway_events");
+        return collection.find(new Document("runwayId", runwayId))
+            .sort(new Document("timestamp", -1)).into(new ArrayList<>());
+    }
+
+    public List<Document> getEmergencyEvents() {
+        MongoCollection<Document> collection = database.getCollection("emergency_events");
+        return collection.find().sort(new Document("timestamp", -1)).into(new ArrayList<>());
+    }
+
+    public List<Document> getWeatherEvents() {
+        MongoCollection<Document> collection = database.getCollection("weather_events");
+        return collection.find().sort(new Document("timestamp", -1)).into(new ArrayList<>());
+    }
+
+    public void clearActiveAircraft() {
+        MongoCollection<Document> collection = database.getCollection("aircraft");
+        collection.deleteMany(new Document());
+    }
+
+    public void clearAllRuntimeData() {
+        clearActiveAircraft();
+        database.getCollection("runway_events").deleteMany(new Document());
+        database.getCollection("emergency_events").deleteMany(new Document());
+    }
+
+    public List<Document> getActiveAircraft() {
+        MongoCollection<Document> collection = database.getCollection("aircraft");
+        return collection.find().into(new ArrayList<>());
     }
 
     public void close() {

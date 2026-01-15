@@ -2,6 +2,7 @@ package com.atc.workers;
 
 import com.atc.core.models.Aircraft;
 import com.atc.core.models.Runway;
+import com.atc.core.SimulationConfig;
 import com.atc.database.DatabaseManager;
 import com.atc.AirTrafficSystem;
 import java.util.*;
@@ -11,11 +12,13 @@ import java.util.concurrent.CompletableFuture;
 public class RunwayManagerWorker implements Runnable {
     private final List<Runway> runways;
     private final PriorityBlockingQueue<Aircraft> landingQueue;
+    private final SimulationConfig config;
     private volatile boolean running = true;
 
-    public RunwayManagerWorker(List<Runway> runways, PriorityBlockingQueue<Aircraft> queue) {
+    public RunwayManagerWorker(List<Runway> runways, PriorityBlockingQueue<Aircraft> queue, SimulationConfig config) {
         this.runways = runways;
         this.landingQueue = queue;
+        this.config = config;
     }
 
     @Override
@@ -23,6 +26,11 @@ public class RunwayManagerWorker implements Runnable {
         while (running) {
             try {
                 Aircraft aircraft = landingQueue.take();
+                
+                if (aircraft.getStatus() == Aircraft.Status.LANDED) {
+                    continue;
+                }
+                
                 Runway assignedRunway = findBestRunway(aircraft);
                 
                 if (assignedRunway != null) {
@@ -35,7 +43,7 @@ public class RunwayManagerWorker implements Runnable {
                             "Aircraft " + aircraft.getCallsign() + " assigned for landing"));
                     AirTrafficSystem.updateGUI();
                     
-                    Thread.sleep(10000);
+                    Thread.sleep((long)(config.getLandingDurationSeconds() * 1000));
                     
                     synchronized(assignedRunway) {
                         aircraft.setStatus(Aircraft.Status.LANDED);
