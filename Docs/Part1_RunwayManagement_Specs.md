@@ -11,7 +11,7 @@
 
 ```
 src/main/java/com/atc/
-├── part1/
+├── core/
 │   ├── controllers/
 │   │   ├── LandingController.java
 │   │   └── EmergencyController.java
@@ -42,7 +42,7 @@ src/main/java/com/atc/
 
 ### 2.1 Aircraft.java (Model)
 ```java
-package com.atc.part1.models;
+package com.atc.core.models;
 
 public class Aircraft {
     // Fields
@@ -84,7 +84,7 @@ public class Aircraft {
 
 ### 2.2 Runway.java (Model)
 ```java
-package com.atc.part1.models;
+package com.atc.core.models;
 
 public class Runway {
     // Fields
@@ -121,7 +121,7 @@ public class Runway {
 
 ### 2.3 LandingRequest.java (Model)
 ```java
-package com.atc.part1.models;
+package com.atc.core.models;
 
 public class LandingRequest implements Comparable<LandingRequest> {
     // Fields
@@ -160,7 +160,7 @@ public class LandingRequest implements Comparable<LandingRequest> {
 
 ### 3.1 LandingWorker.java (Thread Class)
 ```java
-package com.atc.part1.threads;
+package com.atc.core.threads;
 
 public class LandingWorker implements Runnable {
     // Fields
@@ -194,7 +194,7 @@ public class LandingWorker implements Runnable {
 
 ### 3.2 EmergencyWorker.java (Thread Class)
 ```java
-package com.atc.part1.threads;
+package com.atc.core.threads;
 
 public class EmergencyWorker implements Runnable {
     // Fields
@@ -226,7 +226,7 @@ public class EmergencyWorker implements Runnable {
 
 ### 3.3 RunwayMonitor.java (Thread Class)
 ```java
-package com.atc.part1.threads;
+package com.atc.core.threads;
 
 public class RunwayMonitor implements Runnable {
     // Fields
@@ -261,7 +261,7 @@ public class RunwayMonitor implements Runnable {
 
 ### 4.1 RunwayManager.java (Core Manager)
 ```java
-package com.atc.part1.managers;
+package com.atc.core.managers;
 
 public class RunwayManager {
     // Fields
@@ -318,7 +318,7 @@ public class RunwayManager {
 
 ### 4.2 ResourceManager.java (Resource Coordinator)
 ```java
-package com.atc.part1.managers;
+package com.atc.core.managers;
 
 public class ResourceManager {
     // Fields
@@ -348,7 +348,7 @@ public class ResourceManager {
 
 ### 5.1 LandingController.java (Main Controller)
 ```java
-package com.atc.part1.controllers;
+package com.atc.core.controllers;
 
 public class LandingController {
     // THREAD POOLS
@@ -410,7 +410,7 @@ public class LandingController {
 
 ### 5.2 EmergencyController.java (Emergency Handler)
 ```java
-package com.atc.part1.controllers;
+package com.atc.core.controllers;
 
 public class EmergencyController {
     // Fields
@@ -443,7 +443,7 @@ public class EmergencyController {
 
 ### 6.1 AircraftDAO.java
 ```java
-package com.atc.part1.dao;
+package com.atc.core.dao;
 
 public class AircraftDAO {
     private final MongoCollection<Document> aircraftCollection;
@@ -472,7 +472,7 @@ public class AircraftDAO {
 
 ### 6.2 RunwayEventDAO.java
 ```java
-package com.atc.part1.dao;
+package com.atc.core.dao;
 
 public class RunwayEventDAO {
     private final MongoCollection<Document> eventsCollection;

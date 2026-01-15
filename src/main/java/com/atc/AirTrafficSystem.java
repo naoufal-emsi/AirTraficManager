@@ -1,119 +1,135 @@
 package com.atc;
 
-import com.atc.shared.database.DatabaseManager;
-import com.atc.part1.controllers.LandingController;
-import com.atc.part1.managers.RunwayManager;
-import com.atc.part1.managers.ResourceManager;
-import com.atc.part2.controllers.FlightScheduler;
-import com.atc.part2.controllers.WeatherController;
-import com.atc.part2.services.WeatherService;
-import com.atc.part2.services.FuelMonitoringService;
-import com.atc.part2.services.NotificationService;
-import com.atc.gui.AirTrafficGUI;
+import com.atc.core.models.Aircraft;
+import com.atc.core.models.Runway;
+import com.atc.controllers.EmergencyController;
+import com.atc.database.DatabaseManager;
+import com.atc.gui.AirTrafficControlGUI;
+import com.atc.utils.AircraftGenerator;
+import com.atc.workers.*;
+import javax.swing.SwingUtilities;
+import java.util.*;
+import java.util.concurrent.*;
 
 public class AirTrafficSystem {
-    private static LandingController landingController;
-    private static RunwayManager runwayManager;
-    private static ResourceManager resourceManager;
-    private static FlightScheduler flightScheduler;
-    private static WeatherController weatherController;
-    private static WeatherService weatherService;
-    private static FuelMonitoringService fuelMonitoringService;
-    private static NotificationService notificationService;
-    private static boolean isInitialized = false;
-    private static boolean isRunning = false;
+    private static final List<Aircraft> activeAircraft = new CopyOnWriteArrayList<>();
+    private static final List<Runway> runways = new CopyOnWriteArrayList<>();
+    private static final PriorityBlockingQueue<Aircraft> landingQueue = 
+        new PriorityBlockingQueue<>(50, Comparator.comparingInt(Aircraft::getPriority));
+    
+    private static ExecutorService executorService;
+    private static List<Thread> workerThreads = new ArrayList<>();
 
     public static void main(String[] args) {
-        try {
-            initializeDatabase();
-            initializeServices();
-            initializeControllers();
-            startBackgroundThreads();
-            launchGUI(args);
-            setupShutdownHook();
-        } catch (Exception e) {
-            System.err.println("Failed to start Air Traffic System: " + e.getMessage());
-            e.printStackTrace();
-            System.exit(1);
-        }
-    }
-
-    private static void initializeDatabase() {
-        System.out.println("Initializing database...");
-        DatabaseManager.connect();
-        if (DatabaseManager.getInstance().testConnection()) {
-            System.out.println("✅ Database connected");
-        }
-    }
-
-    private static void initializeServices() {
-        System.out.println("Initializing services...");
-        notificationService = new NotificationService();
-        com.atc.part2.dao.FlightDAO flightDAO = new com.atc.part2.dao.FlightDAO();
-        weatherService = new WeatherService(flightDAO, notificationService);
-        fuelMonitoringService = new FuelMonitoringService(notificationService);
-        System.out.println("✅ Services initialized");
-    }
-
-    private static void initializeControllers() {
-        System.out.println("Initializing controllers...");
-        runwayManager = new RunwayManager();
-        resourceManager = new ResourceManager();
-        landingController = new LandingController(runwayManager, resourceManager);
+        System.out.println("=== AIR TRAFFIC CONTROL SYSTEM STARTING ===");
         
-        com.atc.part2.dao.FlightDAO flightDAO = new com.atc.part2.dao.FlightDAO();
-        flightScheduler = new FlightScheduler(weatherService, fuelMonitoringService, notificationService, flightDAO);
-        weatherController = new WeatherController(weatherService, flightScheduler);
-        System.out.println("✅ Controllers initialized");
-    }
-
-    private static void startBackgroundThreads() {
-        System.out.println("Starting background threads...");
-        landingController.startLandingWorkers();
-        flightScheduler.startFlightWorkers();
-        weatherController.startWeatherProcessing();
+        initializeDatabase();
+        initializeRunways();
+        initializeAircraft();
+        startWorkerThreads();
+        launchGUI();
         
-        new Thread(new com.atc.part1.threads.RunwayMonitor(runwayManager)).start();
-        new Thread(new com.atc.part2.threads.WeatherMonitor(weatherService)).start();
-        new Thread(new com.atc.part2.threads.FuelMonitor(fuelMonitoringService)).start();
-        
-        isRunning = true;
-        System.out.println("✅ Background threads started");
-    }
-
-    private static void launchGUI(String[] args) {
-        System.out.println("Launching GUI...");
-        isInitialized = true;
-        javafx.application.Application.launch(AirTrafficGUI.class, args);
-    }
-
-    private static void setupShutdownHook() {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Shutting down...");
+            System.out.println("Shutting down system...");
             shutdown();
         }));
     }
 
-    public static void shutdown() {
-        if (!isRunning) return;
-        landingController.shutdown();
-        flightScheduler.shutdown();
-        weatherController.shutdown();
-        notificationService.shutdown();
-        DatabaseManager.disconnect();
-        isRunning = false;
-        System.out.println("✅ Shutdown complete");
+    private static void initializeDatabase() {
+        try {
+            DatabaseManager.getInstance();
+            System.out.println("✓ Database connected");
+        } catch (Exception e) {
+            System.err.println("✗ Database connection failed: " + e.getMessage());
+        }
     }
 
-    public static LandingController getLandingController() { return landingController; }
-    public static RunwayManager getRunwayManager() { return runwayManager; }
-    public static ResourceManager getResourceManager() { return resourceManager; }
-    public static void setResourceManager(ResourceManager rm) { resourceManager = rm; }
-    public static FlightScheduler getFlightScheduler() { return flightScheduler; }
-    public static WeatherController getWeatherController() { return weatherController; }
-    public static WeatherService getWeatherService() { return weatherService; }
-    public static FuelMonitoringService getFuelMonitoringService() { return fuelMonitoringService; }
-    public static NotificationService getNotificationService() { return notificationService; }
-    public static boolean isInitialized() { return isInitialized; }
-    public static boolean isRunning() { return isRunning; }
+    private static void initializeRunways() {
+        runways.add(new Runway("RWY-09L"));
+        runways.add(new Runway("RWY-09R"));
+        runways.add(new Runway("RWY-27L"));
+        runways.add(new Runway("RWY-27R"));
+        System.out.println("✓ Runways initialized: " + runways.size());
+    }
+
+    private static void initializeAircraft() {
+        for (int i = 0; i < 5; i++) {
+            Aircraft aircraft = AircraftGenerator.generateRandomAircraft();
+            activeAircraft.add(aircraft);
+            landingQueue.offer(aircraft);
+        }
+        System.out.println("✓ Initial aircraft created: " + activeAircraft.size());
+    }
+
+    private static void startWorkerThreads() {
+        executorService = Executors.newFixedThreadPool(10);
+        
+        Thread aircraftUpdateThread = new Thread(new AircraftUpdateWorker(activeAircraft));
+        aircraftUpdateThread.setName("AircraftUpdate-Thread");
+        aircraftUpdateThread.start();
+        workerThreads.add(aircraftUpdateThread);
+        
+        Thread fuelMonitorThread = new Thread(new FuelMonitoringWorker(activeAircraft));
+        fuelMonitorThread.setName("FuelMonitor-Thread");
+        fuelMonitorThread.start();
+        workerThreads.add(fuelMonitorThread);
+        
+        for (int i = 0; i < 3; i++) {
+            Thread runwayThread = new Thread(new RunwayManagerWorker(runways, landingQueue));
+            runwayThread.setName("RunwayManager-" + i);
+            runwayThread.start();
+            workerThreads.add(runwayThread);
+        }
+        
+        Thread emergencyThread = new Thread(new EmergencyHandlerWorker(activeAircraft));
+        emergencyThread.setName("EmergencyHandler-Thread");
+        emergencyThread.start();
+        workerThreads.add(emergencyThread);
+        
+        Thread weatherThread = new Thread(new WeatherWorker(runways));
+        weatherThread.setName("Weather-Thread");
+        weatherThread.start();
+        workerThreads.add(weatherThread);
+        
+        System.out.println("✓ Worker threads started: " + workerThreads.size());
+    }
+
+    private static void launchGUI() {
+        try {
+            System.setProperty("java.awt.headless", "false");
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    EmergencyController emergencyController = new EmergencyController(activeAircraft);
+                    AirTrafficControlGUI gui = new AirTrafficControlGUI(activeAircraft, runways, emergencyController);
+                    gui.setVisible(true);
+                    System.out.println("✓ GUI launched");
+                } catch (Exception e) {
+                    System.err.println("✗ GUI launch failed: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            });
+        } catch (Exception e) {
+            System.err.println("✗ GUI initialization failed: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private static void shutdown() {
+        for (Thread thread : workerThreads) {
+            thread.interrupt();
+        }
+        if (executorService != null) {
+            executorService.shutdownNow();
+        }
+        DatabaseManager.getInstance().close();
+        System.out.println("✓ System shutdown complete");
+    }
+
+    public static List<Aircraft> getActiveAircraft() {
+        return activeAircraft;
+    }
+
+    public static PriorityBlockingQueue<Aircraft> getLandingQueue() {
+        return landingQueue;
+    }
 }

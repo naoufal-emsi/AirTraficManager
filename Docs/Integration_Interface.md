@@ -78,7 +78,7 @@ Object getCollection(String name)                       // → MongoCollection
 
 ### Event
 ```java
-static Event createPart1Event(String type, String msg) // → Event
+static Event createcoreEvent(String type, String msg) // → Event
 static Event createPart2Event(String type, String msg) // → Event
 ```
 

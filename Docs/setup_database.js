@@ -197,7 +197,7 @@ db.createCollection("system_events", {
             timestamp: { bsonType: "date" },
             source: {
                bsonType: "string",
-               enum: ["PART1", "PART2", "SHARED", "GUI", "DATABASE"]
+               enum: ["core", "PART2", "SHARED", "GUI", "DATABASE"]
             },
             component: { bsonType: ["string", "null"] },
             message: { bsonType: "string" },
@@ -632,7 +632,7 @@ db.system_events.insertMany([
    {
       eventType: "THREAD_STARTED",
       timestamp: new Date(Date.now() - 3540000),
-      source: "PART1",
+      source: "core",
       component: "LandingController",
       message: "Landing worker threads started",
       details: {
@@ -674,7 +674,7 @@ db.system_events.insertMany([
       message: "Part 2 notified Part 1 of fuel emergency",
       details: {
          fromPart: "PART2",
-         toPart: "PART1",
+         toPart: "core",
          eventData: {
             aircraftId: "AC003",
             fuelLevel: 5,
