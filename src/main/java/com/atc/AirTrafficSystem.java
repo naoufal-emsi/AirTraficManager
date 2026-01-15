@@ -1,13 +1,10 @@
 package com.atc;
 
-import com.atc.core.models.Aircraft;
-import com.atc.core.models.Runway;
 import com.atc.core.SimulationConfig;
 import com.atc.core.SimulationManager;
 import com.atc.controllers.EmergencyController;
 import com.atc.database.DatabaseManager;
 import com.atc.gui.AirTrafficControlGUI;
-import com.atc.utils.AircraftGenerator;
 import com.atc.workers.*;
 import javax.swing.SwingUtilities;
 import java.util.*;
@@ -131,13 +128,19 @@ public class AirTrafficSystem {
         workerStoppers.forEach(Runnable::run);
         workerStoppers.clear();
         
-        simulationManager.restartSimulation(newConfig, activeAircraft, runways, landingQueue);
+        DatabaseManager dbManager = DatabaseManager.getInstance();
+        dbManager.clearAllRuntimeData();
+        
+        for (int i = 0; i < 4; i++) {
+            dbManager.insertRunway("RWY-0" + (i + 1), "AVAILABLE", null);
+        }
+        
+        simulationManager.stopSimulation();
         currentConfig = newConfig;
+        simulationManager.startSimulation(newConfig);
         
         for (int i = 0; i < 5; i++) {
-            Aircraft aircraft = AircraftGenerator.generateRandomAircraft(currentConfig);
-            activeAircraft.add(aircraft);
-            landingQueue.offer(aircraft);
+            dbManager.generateAndInsertRealisticFlight();
         }
         
         startWorkerThreads();

@@ -107,9 +107,92 @@ public class AirTrafficControlGUI extends JFrame {
     }
 
     private JPanel createBottomPanel() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        panel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createTitledBorder("Emergency Scenarios"));
+        
+        JPanel buttonPanel = new JPanel(new GridLayout(3, 2, 10, 10));
+        buttonPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        JButton fuelLowBtn = new JButton("FUEL LOW Emergency");
+        fuelLowBtn.setBackground(new Color(255, 200, 100));
+        fuelLowBtn.addActionListener(e -> triggerEmergency("FUEL_LOW", 50));
+        
+        JButton fuelCriticalBtn = new JButton("FUEL CRITICAL Emergency");
+        fuelCriticalBtn.setBackground(new Color(255, 100, 100));
+        fuelCriticalBtn.addActionListener(e -> triggerEmergency("FUEL_CRITICAL", 10));
+        
+        JButton medicalMinorBtn = new JButton("MEDICAL (Minor) Emergency");
+        medicalMinorBtn.setBackground(new Color(150, 200, 255));
+        medicalMinorBtn.addActionListener(e -> triggerEmergency("MEDICAL", 20));
+        
+        JButton medicalCriticalBtn = new JButton("MEDICAL (Critical) Emergency");
+        medicalCriticalBtn.setBackground(new Color(100, 150, 255));
+        medicalCriticalBtn.addActionListener(e -> triggerEmergency("MEDICAL", 5));
+        
+        JButton securityMinorBtn = new JButton("SECURITY (Minor) Threat");
+        securityMinorBtn.setBackground(new Color(255, 200, 200));
+        securityMinorBtn.addActionListener(e -> triggerEmergency("SECURITY", 15));
+        
+        JButton securityCriticalBtn = new JButton("SECURITY (Critical) Threat");
+        securityCriticalBtn.setBackground(new Color(255, 100, 150));
+        securityCriticalBtn.addActionListener(e -> triggerEmergency("SECURITY", 8));
+        
+        buttonPanel.add(fuelLowBtn);
+        buttonPanel.add(fuelCriticalBtn);
+        buttonPanel.add(medicalMinorBtn);
+        buttonPanel.add(medicalCriticalBtn);
+        buttonPanel.add(securityMinorBtn);
+        buttonPanel.add(securityCriticalBtn);
+        
+        panel.add(buttonPanel, BorderLayout.CENTER);
         return panel;
+    }
+    
+    private void triggerEmergency(String emergencyType, int priority) {
+        List<Document> aircraft = dbManager.getAllActiveAircraft();
+        if (aircraft.isEmpty()) {
+            log("No aircraft available for emergency scenario");
+            return;
+        }
+        
+        Document selectedAircraft = aircraft.stream()
+            .filter(ac -> "NONE".equals(ac.getString("emergency")))
+            .filter(ac -> !"LANDED".equals(ac.getString("status")))
+            .findFirst()
+            .orElse(null);
+        
+        if (selectedAircraft == null) {
+            log("No suitable aircraft for emergency scenario");
+            return;
+        }
+        
+        String callsign = selectedAircraft.getString("callsign");
+        Document updates = new Document("emergency", emergencyType)
+            .append("priority", priority);
+        
+        if (emergencyType.startsWith("FUEL")) {
+            double currentFuel = selectedAircraft.getDouble("fuel");
+            double newFuel = emergencyType.equals("FUEL_CRITICAL") ? 
+                Math.min(currentFuel, 800.0) : Math.min(currentFuel, 2000.0);
+            updates.append("fuel", newFuel);
+            updates.append("status", "READY_TO_LAND");
+        }
+        
+        dbManager.updateActiveAircraft(callsign, updates);
+        
+        String message = switch(emergencyType) {
+            case "FUEL_LOW" -> "FUEL LOW - " + callsign + " requesting priority landing (Priority: " + priority + ")";
+            case "FUEL_CRITICAL" -> "MAYDAY - " + callsign + " FUEL CRITICAL, immediate landing required (Priority: " + priority + ")";
+            case "MEDICAL" -> priority < 10 ? "MAYDAY - " + callsign + " critical medical emergency (Priority: " + priority + ")" 
+                                            : "PAN-PAN - " + callsign + " medical emergency (Priority: " + priority + ")";
+            case "SECURITY" -> priority < 10 ? "SECURITY ALERT - " + callsign + " critical threat (Priority: " + priority + ")" 
+                                             : "SECURITY - " + callsign + " security concern (Priority: " + priority + ")";
+            default -> callsign + " emergency declared";
+        };
+        
+        dbManager.saveEmergencyEvent(callsign, message);
+        log(message);
+        updateDisplay();
     }
 
     private void generateAircraft() {

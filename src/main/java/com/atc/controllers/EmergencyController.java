@@ -1,47 +1,49 @@
 package com.atc.controllers;
 
-import com.atc.core.models.Aircraft;
 import com.atc.database.DatabaseManager;
 import com.atc.AirTrafficSystem;
-import java.util.List;
-import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.CompletableFuture;
+import org.bson.Document;
 
 public class EmergencyController {
-    private final List<Aircraft> activeAircraft;
-    private final PriorityBlockingQueue<Aircraft> landingQueue;
 
-    public EmergencyController(List<Aircraft> aircraft, PriorityBlockingQueue<Aircraft> queue) {
-        this.activeAircraft = aircraft;
-        this.landingQueue = queue;
+    public EmergencyController() {
     }
 
-    public void declareEmergency(Aircraft aircraft, Aircraft.EmergencyType type) {
-        synchronized(landingQueue) {
-            landingQueue.remove(aircraft);
-            aircraft.declareEmergency(type);
-            landingQueue.offer(aircraft);
-        }
+    public void declareEmergency(String callsign, String emergencyType) {
+        DatabaseManager dbManager = DatabaseManager.getInstance();
         
-        String message = switch(type) {
-            case FIRE -> "MAYDAY MAYDAY - Fire indication, requesting immediate landing";
-            case MEDICAL -> "PAN-PAN - Medical emergency, requesting priority landing";
-            case SECURITY -> "Security threat onboard, discrete emergency code set";
-            case FUEL_CRITICAL -> "MAYDAY - Fuel critical, minimum fuel declared";
-            case FUEL_LOW -> "Requesting priority vectors, fuel below planned margin";
-            case WEATHER_STORM -> "Unable to continue approach due to weather, requesting diversion";
+        int priority = switch(emergencyType) {
+            case "FIRE" -> 1;
+            case "MEDICAL" -> 5;
+            case "SECURITY" -> 8;
+            case "FUEL_CRITICAL" -> 10;
+            case "FUEL_LOW" -> 50;
+            case "WEATHER_STORM" -> 30;
+            default -> 100;
+        };
+        
+        Document updates = new Document("emergency", emergencyType)
+            .append("priority", priority);
+        dbManager.updateActiveAircraft(callsign, updates);
+        
+        String message = switch(emergencyType) {
+            case "FIRE" -> "MAYDAY MAYDAY - Fire indication, requesting immediate landing";
+            case "MEDICAL" -> "PAN-PAN - Medical emergency, requesting priority landing";
+            case "SECURITY" -> "Security threat onboard, discrete emergency code set";
+            case "FUEL_CRITICAL" -> "MAYDAY - Fuel critical, minimum fuel declared";
+            case "FUEL_LOW" -> "Requesting priority vectors, fuel below planned margin";
+            case "WEATHER_STORM" -> "Unable to continue approach due to weather, requesting diversion";
             default -> "Emergency declared";
         };
         
-        CompletableFuture.runAsync(() -> 
-            DatabaseManager.getInstance().saveEmergencyEvent(aircraft, message));
+        dbManager.saveEmergencyEvent(callsign, message);
         AirTrafficSystem.updateGUI();
     }
 
-    public void handleDiversion(Aircraft aircraft, String reason) {
-        aircraft.setStatus(Aircraft.Status.DIVERTED);
-        CompletableFuture.runAsync(() -> 
-            DatabaseManager.getInstance().saveEmergencyEvent(aircraft, 
-                "Aircraft diverted: " + reason));
+    public void handleDiversion(String callsign, String reason) {
+        DatabaseManager dbManager = DatabaseManager.getInstance();
+        Document updates = new Document("status", "DIVERTED");
+        dbManager.updateActiveAircraft(callsign, updates);
+        dbManager.saveEmergencyEvent(callsign, "Aircraft diverted: " + reason);
     }
 }

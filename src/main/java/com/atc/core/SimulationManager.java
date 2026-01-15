@@ -1,7 +1,5 @@
 package com.atc.core;
 
-import com.atc.core.models.Aircraft;
-import com.atc.core.models.Runway;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -61,25 +59,6 @@ public class SimulationManager {
         }
         
         System.out.println("✓ Simulation stopped");
-    }
-    
-    public void restartSimulation(SimulationConfig newConfig, 
-                                 List<Aircraft> activeAircraft, 
-                                 List<Runway> runways,
-                                 PriorityBlockingQueue<Aircraft> landingQueue) {
-        stopSimulation();
-        
-        activeAircraft.clear();
-        landingQueue.clear();
-        
-        for (Runway runway : runways) {
-            runway.releaseRunway();
-            runway.setWeatherAffected(false);
-        }
-        
-        startSimulation(newConfig);
-        
-        System.out.println("✓ Simulation restarted");
     }
     
     public void submitAircraftTask(Runnable task) {
