@@ -83,15 +83,27 @@ public class AirTrafficSystem {
         simulationManager.addWorkerThread(fuelThread);
         workerStoppers.add(fuelWorker::stop);
 
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 4; i++) {
             RunwayManagerWorker runwayWorker = new RunwayManagerWorker();
             Thread runwayThread = new Thread(runwayWorker, "RunwayManager-" + i);
             runwayThread.start();
             simulationManager.addWorkerThread(runwayThread);
             workerStoppers.add(runwayWorker::stop);
         }
+        
+        EmergencyHandlerWorker emergencyWorker = new EmergencyHandlerWorker();
+        Thread emergencyThread = new Thread(emergencyWorker, "EmergencyHandler-Thread");
+        emergencyThread.start();
+        simulationManager.addWorkerThread(emergencyThread);
+        workerStoppers.add(emergencyWorker::stop);
+        
+        WeatherWorker weatherWorker = new WeatherWorker();
+        Thread weatherThread = new Thread(weatherWorker, "Weather-Thread");
+        weatherThread.start();
+        simulationManager.addWorkerThread(weatherThread);
+        workerStoppers.add(weatherWorker::stop);
 
-        System.out.println("✓ Database-only worker threads started");
+        System.out.println("✓ 8 worker threads started (1 Aircraft Update, 1 Fuel Monitor, 4 Runway Managers, 1 Emergency Handler, 1 Weather)");
     }
 
     private static void launchGUI() {
