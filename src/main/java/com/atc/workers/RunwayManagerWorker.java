@@ -21,7 +21,14 @@ public class RunwayManagerWorker implements Runnable {
                 readyAircraft.sort((a1, a2) -> {
                     int p1 = a1.getInteger("priority", 100);
                     int p2 = a2.getInteger("priority", 100);
-                    return Integer.compare(p1, p2);
+                    if (p1 != p2) {
+                        return Integer.compare(p1, p2);
+                    }
+                    Long t1 = a1.getLong("emergencyTimestamp");
+                    Long t2 = a2.getLong("emergencyTimestamp");
+                    if (t1 == null) t1 = 0L;
+                    if (t2 == null) t2 = 0L;
+                    return Long.compare(t1, t2);
                 });
                 
                 for (Document aircraft : readyAircraft) {

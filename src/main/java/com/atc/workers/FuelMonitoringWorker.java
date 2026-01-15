@@ -21,12 +21,13 @@ public class FuelMonitoringWorker implements Runnable {
                 for (Document aircraft : activeAircraft) {
                     if (!"LANDED".equals(aircraft.getString("status"))) {
                         double fuel = aircraft.getDouble("fuel");
+                        String currentEmergency = aircraft.getString("emergency");
                         
-                        if (fuel <= 0) {
+                        if (fuel <= 0 && ("FUEL_LOW".equals(currentEmergency) || "FUEL_CRITICAL".equals(currentEmergency))) {
                             Document updates = new Document("status", "CRASHED")
                                 .append("emergency", "FUEL_EXHAUSTED");
                             dbManager.updateActiveAircraft(aircraft.getString("callsign"), updates);
-                            dbManager.saveEmergencyEvent(aircraft.getString("callsign"), "CRITICAL: " + aircraft.getString("callsign") + " ran out of fuel");
+                            dbManager.saveEmergencyEvent(aircraft.getString("callsign"), "CRITICAL: " + aircraft.getString("callsign") + " ran out of fuel and crashed");
                         }
                     }
                 }

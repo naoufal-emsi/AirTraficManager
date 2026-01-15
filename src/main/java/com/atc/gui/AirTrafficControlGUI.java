@@ -168,7 +168,8 @@ public class AirTrafficControlGUI extends JFrame {
         
         String callsign = selectedAircraft.getString("callsign");
         Document updates = new Document("emergency", emergencyType)
-            .append("priority", priority);
+            .append("priority", priority)
+            .append("emergencyTimestamp", System.currentTimeMillis());
         
         if (emergencyType.startsWith("FUEL")) {
             double currentFuel = selectedAircraft.getDouble("fuel");
