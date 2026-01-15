@@ -23,3 +23,4 @@ print("✓ Collections created: aircraft, runway_events, emergency_events, weath
 print("✓ Indexes created for performance");
 print("");
 print("Database setup complete!");
+print("ok");

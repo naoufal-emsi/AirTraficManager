@@ -2,7 +2,7 @@
 ## Functions Each Part Provides to the Other
 
 ---
-
+ 
 ## PART 1 → PART 2 
 
 ### LandingController
