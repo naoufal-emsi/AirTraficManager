@@ -3,8 +3,10 @@ package com.atc.workers;
 import com.atc.core.models.Aircraft;
 import com.atc.core.models.Runway;
 import com.atc.database.DatabaseManager;
+import com.atc.AirTrafficSystem;
 import java.util.*;
 import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.CompletableFuture;
 
 public class RunwayManagerWorker implements Runnable {
     private final List<Runway> runways;
@@ -24,17 +26,28 @@ public class RunwayManagerWorker implements Runnable {
                 Runway assignedRunway = findBestRunway(aircraft);
                 
                 if (assignedRunway != null) {
-                    assignedRunway.assignAircraft(aircraft);
-                    aircraft.setStatus(Aircraft.Status.LANDING);
-                    DatabaseManager.getInstance().saveRunwayEvent(assignedRunway, 
-                        "Aircraft " + aircraft.getCallsign() + " assigned for landing");
+                    synchronized(assignedRunway) {
+                        assignedRunway.assignAircraft(aircraft);
+                        aircraft.setStatus(Aircraft.Status.LANDING);
+                    }
+                    CompletableFuture.runAsync(() -> 
+                        DatabaseManager.getInstance().saveRunwayEvent(assignedRunway, 
+                            "Aircraft " + aircraft.getCallsign() + " assigned for landing"));
+                    AirTrafficSystem.updateGUI();
                     
                     Thread.sleep(10000);
                     
-                    aircraft.setStatus(Aircraft.Status.LANDED);
-                    assignedRunway.releaseRunway();
-                    DatabaseManager.getInstance().saveRunwayEvent(assignedRunway, 
-                        "Aircraft " + aircraft.getCallsign() + " landed successfully");
+                    synchronized(assignedRunway) {
+                        aircraft.setStatus(Aircraft.Status.LANDED);
+                        assignedRunway.releaseRunway();
+                    }
+                    CompletableFuture.runAsync(() -> 
+                        DatabaseManager.getInstance().saveRunwayEvent(assignedRunway, 
+                            "Aircraft " + aircraft.getCallsign() + " landed successfully"));
+                    AirTrafficSystem.updateGUI();
+                } else {
+                    landingQueue.offer(aircraft);
+                    Thread.sleep(1000);
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();

@@ -1,16 +1,24 @@
 package com.atc.workers;
 
+import com.atc.core.models.Aircraft;
 import com.atc.core.models.Runway;
 import com.atc.database.DatabaseManager;
+import com.atc.AirTrafficSystem;
 import java.util.*;
+import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.CompletableFuture;
 
 public class WeatherWorker implements Runnable {
     private final List<Runway> runways;
+    private final List<Aircraft> activeAircraft;
+    private final PriorityBlockingQueue<Aircraft> landingQueue;
     private volatile boolean running = true;
     private Random random = new Random();
 
-    public WeatherWorker(List<Runway> runways) {
+    public WeatherWorker(List<Runway> runways, List<Aircraft> aircraft, PriorityBlockingQueue<Aircraft> queue) {
         this.runways = runways;
+        this.activeAircraft = aircraft;
+        this.landingQueue = queue;
     }
 
     @Override
@@ -38,8 +46,21 @@ public class WeatherWorker implements Runnable {
         }
         
         if (!affectedRunways.isEmpty()) {
-            DatabaseManager.getInstance().saveWeatherEvent(
-                "Thunderstorm affecting runways", affectedRunways);
+            CompletableFuture.runAsync(() -> 
+                DatabaseManager.getInstance().saveWeatherEvent(
+                    "Thunderstorm affecting runways", affectedRunways));
+            
+            for (Aircraft aircraft : activeAircraft) {
+                if (aircraft.getStatus() == Aircraft.Status.APPROACHING && random.nextDouble() < 0.3) {
+                    synchronized(landingQueue) {
+                        landingQueue.remove(aircraft);
+                        aircraft.declareEmergency(Aircraft.EmergencyType.WEATHER_STORM);
+                        aircraft.setStatus(Aircraft.Status.HOLDING);
+                        landingQueue.offer(aircraft);
+                    }
+                }
+            }
+            AirTrafficSystem.updateGUI();
             
             new Thread(() -> {
                 try {
@@ -49,6 +70,7 @@ public class WeatherWorker implements Runnable {
                             runway.setWeatherAffected(false);
                         }
                     }
+                    AirTrafficSystem.updateGUI();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }

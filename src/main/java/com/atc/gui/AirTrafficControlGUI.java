@@ -9,26 +9,31 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.util.*;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.PriorityBlockingQueue;
 
 public class AirTrafficControlGUI extends JFrame {
     private final List<Aircraft> activeAircraft;
     private final List<Runway> runways;
     private final EmergencyController emergencyController;
+    private final PriorityBlockingQueue<Aircraft> landingQueue;
     
     private DefaultTableModel aircraftTableModel;
     private DefaultTableModel runwayTableModel;
-    private DefaultTableModel emergencyTableModel;
+    private DefaultTableModel queueTableModel;
+    private JTable aircraftTable;
     private JTextArea logArea;
+    private JTextArea selectedAircraftInfo;
     private JLabel statsLabel;
+    private Aircraft selectedAircraft;
 
-    public AirTrafficControlGUI(List<Aircraft> aircraft, List<Runway> runways, EmergencyController controller) {
+    public AirTrafficControlGUI(List<Aircraft> aircraft, List<Runway> runways, EmergencyController controller, PriorityBlockingQueue<Aircraft> queue) {
         this.activeAircraft = aircraft;
         this.runways = runways;
         this.emergencyController = controller;
+        this.landingQueue = queue;
         
         setTitle("Air Traffic Control System");
-        setSize(1400, 900);
+        setSize(1600, 1000);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout(10, 10));
         
@@ -65,50 +70,105 @@ public class AirTrafficControlGUI extends JFrame {
         JButton addAircraftBtn = new JButton("Add Aircraft");
         addAircraftBtn.addActionListener(e -> addRandomAircraft());
         
-        JButton fuelLowBtn = new JButton("Fuel Low Emergency");
-        fuelLowBtn.addActionListener(e -> createEmergency(Aircraft.EmergencyType.FUEL_LOW));
-        
-        JButton fireBtn = new JButton("Fire Emergency");
-        fireBtn.addActionListener(e -> createEmergency(Aircraft.EmergencyType.FIRE));
-        
-        JButton medicalBtn = new JButton("Medical Emergency");
-        medicalBtn.addActionListener(e -> createEmergency(Aircraft.EmergencyType.MEDICAL));
-        
-        JButton securityBtn = new JButton("Security Threat");
-        securityBtn.addActionListener(e -> createEmergency(Aircraft.EmergencyType.SECURITY));
-        
-        JButton weatherBtn = new JButton("Weather Storm");
-        weatherBtn.addActionListener(e -> createEmergency(Aircraft.EmergencyType.WEATHER_STORM));
+        JButton clearLogBtn = new JButton("Clear Log");
+        clearLogBtn.addActionListener(e -> logArea.setText(""));
         
         panel.add(addAircraftBtn);
-        panel.add(fuelLowBtn);
-        panel.add(fireBtn);
-        panel.add(medicalBtn);
-        panel.add(securityBtn);
-        panel.add(weatherBtn);
+        panel.add(clearLogBtn);
         
         return panel;
     }
 
     private JPanel createCenterPanel() {
-        JPanel panel = new JPanel(new GridLayout(2, 2, 10, 10));
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
-        panel.add(createAircraftPanel());
-        panel.add(createRunwayPanel());
-        panel.add(createEmergencyPanel());
-        panel.add(createLogPanel());
+        JSplitPane leftSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, createAircraftPanel(), createSelectedAircraftPanel());
+        leftSplit.setResizeWeight(0.5);
+        
+        JPanel rightPanel = new JPanel(new GridLayout(3, 1, 10, 10));
+        rightPanel.add(createRunwayPanel());
+        rightPanel.add(createQueuePanel());
+        rightPanel.add(createLogPanel());
+        
+        JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftSplit, rightPanel);
+        mainSplit.setResizeWeight(0.5);
+        panel.add(mainSplit, BorderLayout.CENTER);
         
         return panel;
     }
 
     private JPanel createAircraftPanel() {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createTitledBorder("Active Aircraft"));
+        panel.setBorder(BorderFactory.createTitledBorder("Active Aircraft (Click to Select)"));
         
-        String[] columns = {"Callsign", "Fuel", "Speed", "Distance", "Status", "Emergency", "Runway"};
+        String[] columns = {"Callsign", "Fuel", "Speed", "Distance", "Status", "Emergency", "Priority", "Runway"};
         aircraftTableModel = new DefaultTableModel(columns, 0);
-        JTable table = new JTable(aircraftTableModel);
+        aircraftTable = new JTable(aircraftTableModel);
+        aircraftTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        aircraftTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                int row = aircraftTable.getSelectedRow();
+                if (row >= 0 && row < activeAircraft.size()) {
+                    selectedAircraft = activeAircraft.get(row);
+                    updateSelectedAircraftInfo();
+                }
+            }
+        });
+        panel.add(new JScrollPane(aircraftTable), BorderLayout.CENTER);
+        
+        return panel;
+    }
+
+    private JPanel createSelectedAircraftPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createTitledBorder("Selected Aircraft Details"));
+        
+        selectedAircraftInfo = new JTextArea();
+        selectedAircraftInfo.setEditable(false);
+        selectedAircraftInfo.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        panel.add(new JScrollPane(selectedAircraftInfo), BorderLayout.CENTER);
+        
+        JPanel buttonPanel = new JPanel(new GridLayout(3, 2, 5, 5));
+        buttonPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        
+        JButton fuelLowBtn = new JButton("FUEL_LOW");
+        fuelLowBtn.addActionListener(e -> triggerScenario(Aircraft.EmergencyType.FUEL_LOW));
+        
+        JButton fuelCriticalBtn = new JButton("FUEL_CRITICAL");
+        fuelCriticalBtn.addActionListener(e -> triggerScenario(Aircraft.EmergencyType.FUEL_CRITICAL));
+        
+        JButton medicalBtn = new JButton("MEDICAL");
+        medicalBtn.addActionListener(e -> triggerScenario(Aircraft.EmergencyType.MEDICAL));
+        
+        JButton fireBtn = new JButton("FIRE");
+        fireBtn.addActionListener(e -> triggerScenario(Aircraft.EmergencyType.FIRE));
+        
+        JButton securityBtn = new JButton("SECURITY");
+        securityBtn.addActionListener(e -> triggerScenario(Aircraft.EmergencyType.SECURITY));
+        
+        JButton weatherBtn = new JButton("WEATHER_STORM");
+        weatherBtn.addActionListener(e -> triggerScenario(Aircraft.EmergencyType.WEATHER_STORM));
+        
+        buttonPanel.add(fuelLowBtn);
+        buttonPanel.add(fuelCriticalBtn);
+        buttonPanel.add(medicalBtn);
+        buttonPanel.add(fireBtn);
+        buttonPanel.add(securityBtn);
+        buttonPanel.add(weatherBtn);
+        
+        panel.add(buttonPanel, BorderLayout.SOUTH);
+        
+        return panel;
+    }
+    
+    private JPanel createQueuePanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createTitledBorder("Landing Queue (Priority Order)"));
+        
+        String[] columns = {"Position", "Callsign", "Priority", "Emergency", "ETA"};
+        queueTableModel = new DefaultTableModel(columns, 0);
+        JTable table = new JTable(queueTableModel);
         panel.add(new JScrollPane(table), BorderLayout.CENTER);
         
         return panel;
@@ -121,19 +181,6 @@ public class AirTrafficControlGUI extends JFrame {
         String[] columns = {"Runway ID", "Status", "Aircraft", "Weather"};
         runwayTableModel = new DefaultTableModel(columns, 0);
         JTable table = new JTable(runwayTableModel);
-        panel.add(new JScrollPane(table), BorderLayout.CENTER);
-        
-        return panel;
-    }
-
-    private JPanel createEmergencyPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createTitledBorder("Emergency Alerts"));
-        
-        String[] columns = {"Callsign", "Type", "Priority", "Action"};
-        emergencyTableModel = new DefaultTableModel(columns, 0);
-        JTable table = new JTable(emergencyTableModel);
-        table.setSelectionBackground(Color.RED);
         panel.add(new JScrollPane(table), BorderLayout.CENTER);
         
         return panel;
@@ -154,32 +201,54 @@ public class AirTrafficControlGUI extends JFrame {
     private JPanel createBottomPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         panel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        
-        JButton clearLogBtn = new JButton("Clear Log");
-        clearLogBtn.addActionListener(e -> logArea.setText(""));
-        panel.add(clearLogBtn);
-        
         return panel;
     }
 
     private void addRandomAircraft() {
         Aircraft aircraft = AircraftGenerator.generateRandomAircraft();
-        activeAircraft.add(aircraft);
+        com.atc.AirTrafficSystem.addAircraft(aircraft);
         log("New aircraft added: " + aircraft.getCallsign());
     }
-
-    private void createEmergency(Aircraft.EmergencyType type) {
-        Aircraft aircraft = AircraftGenerator.generateEmergencyAircraft(type);
-        activeAircraft.add(aircraft);
-        emergencyController.declareEmergency(aircraft, type);
-        log("EMERGENCY: " + aircraft.getCallsign() + " - " + type);
+    
+    private void triggerScenario(Aircraft.EmergencyType type) {
+        if (selectedAircraft == null) {
+            JOptionPane.showMessageDialog(this, "Please select an aircraft first", "No Selection", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (selectedAircraft.getStatus() == Aircraft.Status.LANDED) {
+            JOptionPane.showMessageDialog(this, "Aircraft has already landed", "Invalid Selection", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        emergencyController.declareEmergency(selectedAircraft, type);
+        log("SCENARIO TRIGGERED: " + selectedAircraft.getCallsign() + " - " + type);
+    }
+    
+    private void updateSelectedAircraftInfo() {
+        if (selectedAircraft == null) {
+            selectedAircraftInfo.setText("No aircraft selected");
+            return;
+        }
+        StringBuilder info = new StringBuilder();
+        info.append("Callsign: ").append(selectedAircraft.getCallsign()).append("\n");
+        info.append("Fuel Level: ").append(String.format("%.2f", selectedAircraft.getFuelLevel())).append(" units\n");
+        info.append("ETA: ").append(selectedAircraft.getEta()).append("\n");
+        info.append("Status: ").append(selectedAircraft.getStatus()).append("\n");
+        info.append("Priority: ").append(selectedAircraft.getPriority()).append("\n");
+        info.append("Assigned Runway: ").append(selectedAircraft.getAssignedRunway() != null ? selectedAircraft.getAssignedRunway() : "N/A").append("\n");
+        info.append("Emergency Type: ").append(selectedAircraft.getEmergencyType()).append("\n");
+        info.append("Speed: ").append(selectedAircraft.getSpeed()).append(" knots\n");
+        info.append("Distance: ").append(String.format("%.2f", selectedAircraft.getDistanceToAirport())).append(" nm\n");
+        selectedAircraftInfo.setText(info.toString());
     }
 
-    private void updateDisplay() {
+    public void updateDisplay() {
         updateAircraftTable();
         updateRunwayTable();
-        updateEmergencyTable();
+        updateQueueTable();
         updateStats();
+        if (selectedAircraft != null) {
+            updateSelectedAircraftInfo();
+        }
     }
 
     private void updateAircraftTable() {
@@ -192,48 +261,42 @@ public class AirTrafficControlGUI extends JFrame {
                 String.format("%.1f nm", aircraft.getDistanceToAirport()),
                 aircraft.getStatus(),
                 aircraft.getEmergencyType(),
+                aircraft.getPriority(),
                 aircraft.getAssignedRunway() != null ? aircraft.getAssignedRunway() : "N/A"
             });
+        }
+    }
+
+    private void updateQueueTable() {
+        queueTableModel.setRowCount(0);
+        List<Aircraft> queueList = new ArrayList<>(landingQueue);
+        queueList.sort(Comparator.comparingInt(Aircraft::getPriority));
+        int position = 1;
+        for (Aircraft aircraft : queueList) {
+            if (aircraft.getStatus() != Aircraft.Status.LANDED && aircraft.getStatus() != Aircraft.Status.LANDING) {
+                queueTableModel.addRow(new Object[]{
+                    position++,
+                    aircraft.getCallsign(),
+                    aircraft.getPriority(),
+                    aircraft.getEmergencyType(),
+                    aircraft.getEta()
+                });
+            }
         }
     }
 
     private void updateRunwayTable() {
         runwayTableModel.setRowCount(0);
         for (Runway runway : runways) {
+            String availability = runway.isOpen() ? "AVAILABLE" : "OCCUPIED";
+            if (runway.isWeatherAffected()) availability = "BLOCKED";
             runwayTableModel.addRow(new Object[]{
                 runway.getRunwayId(),
-                runway.getStatus(),
+                availability,
                 runway.getCurrentAircraft() != null ? runway.getCurrentAircraft().getCallsign() : "None",
-                runway.isWeatherAffected() ? "AFFECTED" : "Clear"
+                runway.isWeatherAffected() ? "STORM" : "Clear"
             });
         }
-    }
-
-    private void updateEmergencyTable() {
-        emergencyTableModel.setRowCount(0);
-        for (Aircraft aircraft : activeAircraft) {
-            if (aircraft.isEmergency() && aircraft.getStatus() != Aircraft.Status.LANDED) {
-                String action = getEmergencyAction(aircraft.getEmergencyType());
-                emergencyTableModel.addRow(new Object[]{
-                    aircraft.getCallsign(),
-                    aircraft.getEmergencyType(),
-                    aircraft.getPriority(),
-                    action
-                });
-            }
-        }
-    }
-
-    private String getEmergencyAction(Aircraft.EmergencyType type) {
-        return switch(type) {
-            case FIRE -> "Fire services positioned";
-            case MEDICAL -> "Ambulance dispatched";
-            case SECURITY -> "Law enforcement alerted";
-            case FUEL_CRITICAL -> "Direct routing cleared";
-            case FUEL_LOW -> "Priority vectors assigned";
-            case WEATHER_STORM -> "Diversion in progress";
-            default -> "Monitoring";
-        };
     }
 
     private void updateStats() {
@@ -248,7 +311,7 @@ public class AirTrafficControlGUI extends JFrame {
         ));
     }
 
-    private void log(String message) {
+    public void log(String message) {
         SwingUtilities.invokeLater(() -> {
             logArea.append(String.format("[%tT] %s\n", System.currentTimeMillis(), message));
             logArea.setCaretPosition(logArea.getDocument().getLength());

@@ -2,17 +2,26 @@ package com.atc.controllers;
 
 import com.atc.core.models.Aircraft;
 import com.atc.database.DatabaseManager;
+import com.atc.AirTrafficSystem;
 import java.util.List;
+import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.CompletableFuture;
 
 public class EmergencyController {
     private final List<Aircraft> activeAircraft;
+    private final PriorityBlockingQueue<Aircraft> landingQueue;
 
-    public EmergencyController(List<Aircraft> aircraft) {
+    public EmergencyController(List<Aircraft> aircraft, PriorityBlockingQueue<Aircraft> queue) {
         this.activeAircraft = aircraft;
+        this.landingQueue = queue;
     }
 
     public void declareEmergency(Aircraft aircraft, Aircraft.EmergencyType type) {
-        aircraft.declareEmergency(type);
+        synchronized(landingQueue) {
+            landingQueue.remove(aircraft);
+            aircraft.declareEmergency(type);
+            landingQueue.offer(aircraft);
+        }
         
         String message = switch(type) {
             case FIRE -> "MAYDAY MAYDAY - Fire indication, requesting immediate landing";
@@ -24,12 +33,15 @@ public class EmergencyController {
             default -> "Emergency declared";
         };
         
-        DatabaseManager.getInstance().saveEmergencyEvent(aircraft, message);
+        CompletableFuture.runAsync(() -> 
+            DatabaseManager.getInstance().saveEmergencyEvent(aircraft, message));
+        AirTrafficSystem.updateGUI();
     }
 
     public void handleDiversion(Aircraft aircraft, String reason) {
         aircraft.setStatus(Aircraft.Status.DIVERTED);
-        DatabaseManager.getInstance().saveEmergencyEvent(aircraft, 
-            "Aircraft diverted: " + reason);
+        CompletableFuture.runAsync(() -> 
+            DatabaseManager.getInstance().saveEmergencyEvent(aircraft, 
+                "Aircraft diverted: " + reason));
     }
 }
