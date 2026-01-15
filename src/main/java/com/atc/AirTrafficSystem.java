@@ -14,11 +14,6 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public class AirTrafficSystem {
-    private static final List<Aircraft> activeAircraft = new CopyOnWriteArrayList<>();
-    private static final List<Runway> runways = new CopyOnWriteArrayList<>();
-    private static final PriorityBlockingQueue<Aircraft> landingQueue =
-            new PriorityBlockingQueue<>(50, Comparator.comparingInt(Aircraft::getPriority));
-
     private static SimulationManager simulationManager;
     private static SimulationConfig currentConfig;
     private static AirTrafficControlGUI gui;
@@ -41,19 +36,23 @@ public class AirTrafficSystem {
 
     private static void initializeDatabase() {
         try {
-            DatabaseManager.getInstance();
-            System.out.println("✓ Database connected");
+            DatabaseManager dbManager = DatabaseManager.getInstance();
+            dbManager.clearAllRuntimeData(); // Clear old data
+            dbManager.initializeAirportData(); // Load real airports
+            dbManager.initializeAircraftTypes(); // Load real aircraft specs
+            System.out.println("✓ Database connected with realistic data");
         } catch (Exception e) {
             System.err.println("✗ Database connection failed: " + e.getMessage());
         }
     }
 
     private static void initializeRunways() {
-        runways.add(new Runway("RWY-09L"));
-        runways.add(new Runway("RWY-09R"));
-        runways.add(new Runway("RWY-27L"));
-        runways.add(new Runway("RWY-27R"));
-        System.out.println("✓ Runways initialized: " + runways.size());
+        DatabaseManager dbManager = DatabaseManager.getInstance();
+        dbManager.insertRunway("RWY-09L", "AVAILABLE", null);
+        dbManager.insertRunway("RWY-09R", "AVAILABLE", null);
+        dbManager.insertRunway("RWY-27L", "AVAILABLE", null);
+        dbManager.insertRunway("RWY-27R", "AVAILABLE", null);
+        System.out.println("✓ Runways initialized in database: 4");
     }
 
     private static void initializeSimulation() {
@@ -61,50 +60,41 @@ public class AirTrafficSystem {
         simulationManager = SimulationManager.getInstance();
         simulationManager.startSimulation(currentConfig);
         
-        for (int i = 0; i < 5; i++) {
-            Aircraft aircraft = AircraftGenerator.generateRandomAircraft(currentConfig);
-            activeAircraft.add(aircraft);
-            landingQueue.offer(aircraft);
+        // Generate realistic aircraft directly in database
+        DatabaseManager dbManager = DatabaseManager.getInstance();
+        for (int i = 0; i < 3; i++) {
+            String callsign = dbManager.generateAndInsertRealisticFlight();
+            if (callsign != null) {
+                System.out.println("Generated flight: " + callsign);
+            }
         }
         
         startWorkerThreads();
-        System.out.println("✓ Simulation initialized with " + activeAircraft.size() + " aircraft");
+        System.out.println("✓ Realistic simulation initialized with database-only operations");
     }
 
     private static void startWorkerThreads() {
-        AircraftUpdateWorker updateWorker = new AircraftUpdateWorker(activeAircraft, currentConfig.getTimeStepSeconds());
+        AircraftUpdateWorker updateWorker = new AircraftUpdateWorker(currentConfig.getTimeStepSeconds());
         Thread updateThread = new Thread(updateWorker, "AircraftUpdate-Thread");
         updateThread.start();
         simulationManager.addWorkerThread(updateThread);
         workerStoppers.add(updateWorker::stop);
 
-        FuelMonitoringWorker fuelWorker = new FuelMonitoringWorker(activeAircraft, landingQueue, currentConfig);
+        FuelMonitoringWorker fuelWorker = new FuelMonitoringWorker(currentConfig.getTimeStepSeconds());
         Thread fuelThread = new Thread(fuelWorker, "FuelMonitor-Thread");
         fuelThread.start();
         simulationManager.addWorkerThread(fuelThread);
         workerStoppers.add(fuelWorker::stop);
 
-        for (int i = 0; i < 3; i++) {
-            RunwayManagerWorker runwayWorker = new RunwayManagerWorker(runways, landingQueue, currentConfig);
+        for (int i = 0; i < 2; i++) {
+            RunwayManagerWorker runwayWorker = new RunwayManagerWorker();
             Thread runwayThread = new Thread(runwayWorker, "RunwayManager-" + i);
             runwayThread.start();
             simulationManager.addWorkerThread(runwayThread);
             workerStoppers.add(runwayWorker::stop);
         }
 
-        EmergencyHandlerWorker emergencyWorker = new EmergencyHandlerWorker(activeAircraft, runways);
-        Thread emergencyThread = new Thread(emergencyWorker, "EmergencyHandler-Thread");
-        emergencyThread.start();
-        simulationManager.addWorkerThread(emergencyThread);
-        workerStoppers.add(emergencyWorker::stop);
-
-        WeatherWorker weatherWorker = new WeatherWorker(runways, activeAircraft, landingQueue);
-        Thread weatherThread = new Thread(weatherWorker, "Weather-Thread");
-        weatherThread.start();
-        simulationManager.addWorkerThread(weatherThread);
-        workerStoppers.add(weatherWorker::stop);
-
-        System.out.println("✓ Worker threads started");
+        System.out.println("✓ Database-only worker threads started");
     }
 
     private static void launchGUI() {
@@ -112,10 +102,9 @@ public class AirTrafficSystem {
             System.setProperty("java.awt.headless", "false");
             SwingUtilities.invokeLater(() -> {
                 try {
-                    emergencyController = new EmergencyController(activeAircraft, landingQueue);
-                    gui = new AirTrafficControlGUI(activeAircraft, runways, emergencyController, landingQueue, currentConfig);
+                    gui = new AirTrafficControlGUI();
                     gui.setVisible(true);
-                    System.out.println("✓ GUI launched");
+                    System.out.println("✓ Database-driven GUI launched");
                 } catch (Exception e) {
                     System.err.println("✗ GUI launch failed: " + e.getMessage());
                     e.printStackTrace();
@@ -133,9 +122,8 @@ public class AirTrafficSystem {
         }
     }
 
-    public static void addAircraft(Aircraft aircraft) {
-        activeAircraft.add(aircraft);
-        landingQueue.offer(aircraft);
+    public static void addAircraft(String callsign, String aircraftType, double fuel, double speed, double distance, String origin, String destination) {
+        DatabaseManager.getInstance().insertActiveAircraft(callsign, aircraftType, fuel, speed, distance, origin, destination, "APPROACHING", "NONE", 100);
         updateGUI();
     }
     
@@ -165,16 +153,12 @@ public class AirTrafficSystem {
         System.out.println("✓ System shutdown complete");
     }
 
-    public static List<Aircraft> getActiveAircraft() {
-        return activeAircraft;
+    public static List<org.bson.Document> getActiveAircraft() {
+        return DatabaseManager.getInstance().getAllActiveAircraft();
     }
 
-    public static PriorityBlockingQueue<Aircraft> getLandingQueue() {
-        return landingQueue;
-    }
-
-    public static List<Runway> getRunways() {
-        return runways;
+    public static List<org.bson.Document> getRunways() {
+        return DatabaseManager.getInstance().getAllRunways();
     }
     
     public static SimulationConfig getCurrentConfig() {

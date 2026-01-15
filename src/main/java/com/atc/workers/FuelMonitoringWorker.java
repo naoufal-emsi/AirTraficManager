@@ -1,43 +1,47 @@
 package com.atc.workers;
 
-import com.atc.core.models.Aircraft;
-import com.atc.core.SimulationConfig;
 import com.atc.database.DatabaseManager;
-import com.atc.AirTrafficSystem;
+import org.bson.Document;
 import java.util.List;
-import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.CompletableFuture;
 
 public class FuelMonitoringWorker implements Runnable {
-    private final List<Aircraft> activeAircraft;
-    private final PriorityBlockingQueue<Aircraft> landingQueue;
-    private final SimulationConfig config;
+    private final double timeStepSeconds;
     private volatile boolean running = true;
 
-    public FuelMonitoringWorker(List<Aircraft> aircraft, PriorityBlockingQueue<Aircraft> queue, SimulationConfig config) {
-        this.activeAircraft = aircraft;
-        this.landingQueue = queue;
-        this.config = config;
+    public FuelMonitoringWorker(double timeStepSeconds) {
+        this.timeStepSeconds = timeStepSeconds;
     }
 
     @Override
     public void run() {
+        DatabaseManager dbManager = DatabaseManager.getInstance();
         while (running) {
             try {
-                for (Aircraft aircraft : activeAircraft) {
-                    if (aircraft.getStatus() != Aircraft.Status.LANDED) {
-                        if (aircraft.checkAndEscalateFuelStatus()) {
-                            landingQueue.remove(aircraft);
-                            landingQueue.offer(aircraft);
+                List<Document> activeAircraft = dbManager.getAllActiveAircraft();
+                for (Document aircraft : activeAircraft) {
+                    if (!"LANDED".equals(aircraft.getString("status"))) {
+                        double fuel = aircraft.getDouble("fuel");
+                        String emergency = "NONE";
+                        int priority = 100;
+                        
+                        if (fuel < 1000) {
+                            emergency = "FUEL_CRITICAL";
+                            priority = 1;
+                        } else if (fuel < 3000) {
+                            emergency = "FUEL_LOW";
+                            priority = 25;
+                        }
+                        
+                        if (!"NONE".equals(emergency)) {
+                            Document updates = new Document("emergency", emergency)
+                                .append("priority", priority);
+                            dbManager.updateActiveAircraft(aircraft.getString("callsign"), updates);
                             
-                            CompletableFuture.runAsync(() -> 
-                                DatabaseManager.getInstance().saveEmergencyEvent(aircraft, 
-                                    "Fuel escalation: " + aircraft.getEmergencyType()));
-                            AirTrafficSystem.updateGUI();
+                            dbManager.saveEmergencyEvent(aircraft.getString("callsign"), "Fuel emergency: " + aircraft.getString("callsign") + " - " + emergency);
                         }
                     }
                 }
-                Thread.sleep((long)(config.getTimeStepSeconds() * 1000));
+                Thread.sleep((long)(timeStepSeconds * 1000));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;

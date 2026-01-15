@@ -1,80 +1,66 @@
 package com.atc.workers;
 
-import com.atc.core.models.Aircraft;
-import com.atc.core.models.Runway;
-import com.atc.core.SimulationConfig;
 import com.atc.database.DatabaseManager;
-import com.atc.AirTrafficSystem;
-import java.util.*;
-import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.CompletableFuture;
+import org.bson.Document;
+import java.util.List;
 
 public class RunwayManagerWorker implements Runnable {
-    private final List<Runway> runways;
-    private final PriorityBlockingQueue<Aircraft> landingQueue;
-    private final SimulationConfig config;
     private volatile boolean running = true;
 
-    public RunwayManagerWorker(List<Runway> runways, PriorityBlockingQueue<Aircraft> queue, SimulationConfig config) {
-        this.runways = runways;
-        this.landingQueue = queue;
-        this.config = config;
+    public RunwayManagerWorker() {
     }
 
     @Override
     public void run() {
+        DatabaseManager dbManager = DatabaseManager.getInstance();
         while (running) {
             try {
-                Aircraft aircraft = landingQueue.take();
+                List<Document> readyAircraft = dbManager.getAllActiveAircraft();
+                List<Document> availableRunways = dbManager.getAllRunways();
                 
-                if (aircraft.getStatus() == Aircraft.Status.LANDED) {
-                    continue;
-                }
-                
-                Runway assignedRunway = findBestRunway(aircraft);
-                
-                if (assignedRunway != null) {
-                    synchronized(assignedRunway) {
-                        assignedRunway.assignAircraft(aircraft);
-                        aircraft.setStatus(Aircraft.Status.LANDING);
+                for (Document aircraft : readyAircraft) {
+                    if ("READY_TO_LAND".equals(aircraft.getString("status"))) {
+                        Document runway = findAvailableRunway(availableRunways);
+                        if (runway != null) {
+                            // Assign aircraft to runway
+                            dbManager.updateRunway(runway.getString("runwayId"), 
+                                new Document("status", "OCCUPIED")
+                                    .append("currentAircraft", aircraft.getString("callsign")));
+                            
+                            // Update aircraft status
+                            dbManager.updateActiveAircraft(aircraft.getString("callsign"), 
+                                new Document("status", "LANDING")
+                                    .append("runway", runway.getString("runwayId")));
+                            
+                            // Log event
+                            dbManager.saveRunwayEvent("Aircraft " + aircraft.getString("callsign") + " assigned to " + runway.getString("runwayId"));
+                            
+                            // Simulate landing duration
+                            Thread.sleep(5000);
+                            
+                            // Complete landing
+                            dbManager.updateActiveAircraft(aircraft.getString("callsign"), 
+                                new Document("status", "LANDED"));
+                            
+                            dbManager.updateRunway(runway.getString("runwayId"), 
+                                new Document("status", "AVAILABLE")
+                                    .append("currentAircraft", null));
+                            
+                            dbManager.saveRunwayEvent("Aircraft " + aircraft.getString("callsign") + " landed on " + runway.getString("runwayId"));
+                        }
                     }
-                    CompletableFuture.runAsync(() -> 
-                        DatabaseManager.getInstance().saveRunwayEvent(assignedRunway, 
-                            "Aircraft " + aircraft.getCallsign() + " assigned for landing"));
-                    AirTrafficSystem.updateGUI();
-                    
-                    Thread.sleep((long)(config.getLandingDurationSeconds() * 1000));
-                    
-                    synchronized(assignedRunway) {
-                        aircraft.setStatus(Aircraft.Status.LANDED);
-                        assignedRunway.releaseRunway();
-                    }
-                    CompletableFuture.runAsync(() -> 
-                        DatabaseManager.getInstance().saveRunwayEvent(assignedRunway, 
-                            "Aircraft " + aircraft.getCallsign() + " landed successfully"));
-                    AirTrafficSystem.updateGUI();
-                } else {
-                    landingQueue.offer(aircraft);
-                    Thread.sleep(1000);
                 }
+                Thread.sleep(2000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
             }
         }
     }
-
-    private Runway findBestRunway(Aircraft aircraft) {
-        if (aircraft.needsImmediateLanding()) {
-            for (Runway runway : runways) {
-                if (runway.isAvailableForEmergency()) {
-                    return runway;
-                }
-            }
-        }
-        
-        for (Runway runway : runways) {
-            if (runway.isOpen() && !runway.isWeatherAffected()) {
+    
+    private Document findAvailableRunway(List<Document> runways) {
+        for (Document runway : runways) {
+            if ("AVAILABLE".equals(runway.getString("status"))) {
                 return runway;
             }
         }
