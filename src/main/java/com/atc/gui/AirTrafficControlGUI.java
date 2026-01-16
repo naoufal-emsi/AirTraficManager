@@ -218,11 +218,28 @@ public class AirTrafficControlGUI extends JFrame {
         try {
             double positionMeters = Double.parseDouble(position.trim());
             List<Document> runways = dbManager.getAllRunways();
-            int runwayCount = runways.size() + 1;
             
-            int runwayNumber = (runwayCount - 1) % 36 + 1;
-            String side = runwayCount % 2 == 0 ? "R" : "L";
-            String runwayId = "RWY-" + String.format("%02d", runwayNumber) + side;
+            Set<String> existingIds = new HashSet<>();
+            for (Document r : runways) {
+                existingIds.add(r.getString("runwayId"));
+            }
+            
+            String runwayId = null;
+            for (int num = 1; num <= 36; num++) {
+                for (String side : new String[]{"L", "R", "C"}) {
+                    String candidate = "RWY-" + String.format("%02d", num) + side;
+                    if (!existingIds.contains(candidate)) {
+                        runwayId = candidate;
+                        break;
+                    }
+                }
+                if (runwayId != null) break;
+            }
+            
+            if (runwayId == null) {
+                log("Cannot add more runways - all IDs used");
+                return;
+            }
             
             dbManager.insertRunway(runwayId, "AVAILABLE", null, positionMeters);
             log("Added runway: " + runwayId + " at position " + positionMeters + "m");

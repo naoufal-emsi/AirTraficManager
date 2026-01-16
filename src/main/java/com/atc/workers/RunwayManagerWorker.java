@@ -74,7 +74,7 @@ public class RunwayManagerWorker implements Runnable {
     
     private Document findClosestAvailableRunway(List<Document> runways, Document aircraft) {
         double aircraftDistance = aircraft.getDouble("distance");
-        return runways.stream()
+        Document closest = runways.stream()
             .filter(r -> "AVAILABLE".equals(r.getString("status")))
             .min((r1, r2) -> {
                 double pos1 = r1.getDouble("position");
@@ -84,6 +84,13 @@ public class RunwayManagerWorker implements Runnable {
                 return Double.compare(dist1, dist2);
             })
             .orElse(null);
+        
+        if (closest != null) {
+            System.out.println("Aircraft " + aircraft.getString("callsign") + 
+                " at distance " + aircraftDistance + "m assigned to " + 
+                closest.getString("runwayId") + " at position " + closest.getDouble("position") + "m");
+        }
+        return closest;
     }
 
     public void stop() {
