@@ -45,11 +45,11 @@ public class AirTrafficSystem {
 
     private static void initializeRunways() {
         DatabaseManager dbManager = DatabaseManager.getInstance();
-        dbManager.insertRunway("RWY-09L", "AVAILABLE", null);
-        dbManager.insertRunway("RWY-09R", "AVAILABLE", null);
-        dbManager.insertRunway("RWY-27L", "AVAILABLE", null);
-        dbManager.insertRunway("RWY-27R", "AVAILABLE", null);
-        System.out.println("✓ Runways initialized in database: 4");
+        dbManager.insertRunway("RWY-09L", "AVAILABLE", null, 500.0);
+        dbManager.insertRunway("RWY-09R", "AVAILABLE", null, 1500.0);
+        dbManager.insertRunway("RWY-27L", "AVAILABLE", null, 2500.0);
+        dbManager.insertRunway("RWY-27R", "AVAILABLE", null, 3500.0);
+        System.out.println("✓ Runways initialized in database with positions: 4");
     }
 
     private static void initializeSimulation() {
@@ -144,7 +144,7 @@ public class AirTrafficSystem {
         dbManager.clearAllRuntimeData();
         
         for (int i = 0; i < 4; i++) {
-            dbManager.insertRunway("RWY-0" + (i + 1), "AVAILABLE", null);
+            dbManager.insertRunway("RWY-0" + (i + 1), "AVAILABLE", null, (i + 1) * 1000.0);
         }
         
         simulationManager.stopSimulation();

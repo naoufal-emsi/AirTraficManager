@@ -77,9 +77,11 @@ public class RunwayManagerWorker implements Runnable {
         return runways.stream()
             .filter(r -> "AVAILABLE".equals(r.getString("status")))
             .min((r1, r2) -> {
-                int dist1 = Math.abs(r1.getString("runwayId").hashCode() % 100);
-                int dist2 = Math.abs(r2.getString("runwayId").hashCode() % 100);
-                return Integer.compare(dist1, dist2);
+                double pos1 = r1.getDouble("position");
+                double pos2 = r2.getDouble("position");
+                double dist1 = Math.abs(aircraftDistance - pos1);
+                double dist2 = Math.abs(aircraftDistance - pos2);
+                return Double.compare(dist1, dist2);
             })
             .orElse(null);
     }

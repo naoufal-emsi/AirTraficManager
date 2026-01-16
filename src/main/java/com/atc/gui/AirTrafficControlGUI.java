@@ -49,10 +49,14 @@ public class AirTrafficControlGUI extends JFrame {
         JButton addAircraftBtn = new JButton("Generate Aircraft");
         addAircraftBtn.addActionListener(e -> generateAircraft());
         
+        JButton addRunwayBtn = new JButton("Add Runway");
+        addRunwayBtn.addActionListener(e -> addRunway());
+        
         JButton clearLogBtn = new JButton("Clear Log");
         clearLogBtn.addActionListener(e -> logArea.setText(""));
         
         controlPanel.add(addAircraftBtn);
+        controlPanel.add(addRunwayBtn);
         controlPanel.add(clearLogBtn);
         panel.add(controlPanel, BorderLayout.SOUTH);
         
@@ -202,6 +206,29 @@ public class AirTrafficControlGUI extends JFrame {
             log("Generated aircraft: " + callsign);
         } else {
             log("Failed to generate aircraft - check database");
+        }
+    }
+    
+    private void addRunway() {
+        String position = JOptionPane.showInputDialog(this, "Enter runway position (meters):", "Add Runway", JOptionPane.QUESTION_MESSAGE);
+        if (position == null || position.trim().isEmpty()) {
+            return;
+        }
+        
+        try {
+            double positionMeters = Double.parseDouble(position.trim());
+            List<Document> runways = dbManager.getAllRunways();
+            int runwayCount = runways.size() + 1;
+            
+            int runwayNumber = (runwayCount - 1) % 36 + 1;
+            String side = runwayCount % 2 == 0 ? "R" : "L";
+            String runwayId = "RWY-" + String.format("%02d", runwayNumber) + side;
+            
+            dbManager.insertRunway(runwayId, "AVAILABLE", null, positionMeters);
+            log("Added runway: " + runwayId + " at position " + positionMeters + "m");
+            updateDisplay();
+        } catch (NumberFormatException e) {
+            log("Invalid position value. Please enter a number.");
         }
     }
 
