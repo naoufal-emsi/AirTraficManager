@@ -117,6 +117,10 @@ public class Aircraft {
         this.emergencyType = type;
         if (type == EmergencyType.FIRE) {
             this.fireTimeRemainingSeconds = FIRE_INITIAL_TIME;
+            // Fire emergency: increase speed to reach airport faster
+            this.speedMetersPerSecond *= 1.3; // 30% faster
+            // Higher speed means higher fuel burn
+            this.fuelBurnRate *= 1.5; // 50% more fuel consumption
         }
         lastStateChange = LocalDateTime.now();
     }
