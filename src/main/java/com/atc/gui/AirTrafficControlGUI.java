@@ -180,7 +180,7 @@ public class AirTrafficControlGUI extends JFrame {
             double newFuel = emergencyType.equals("FUEL_CRITICAL") ? 
                 Math.min(currentFuel, 800.0) : Math.min(currentFuel, 2000.0);
             updates.append("fuel", newFuel);
-            updates.append("status", "READY_TO_LAND");
+            updates.append("status", "HOLDING");
         }
         
         dbManager.updateActiveAircraft(callsign, updates);

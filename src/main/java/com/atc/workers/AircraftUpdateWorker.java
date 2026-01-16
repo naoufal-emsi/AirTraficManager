@@ -30,7 +30,7 @@ public class AircraftUpdateWorker implements Runnable {
                         Document updates = new Document("distance", distance);
                         
                         if (distance <= 5000 && "APPROACHING".equals(status)) {
-                            updates.append("status", "READY_TO_LAND");
+                            updates.append("status", "HOLDING");
                         }
                         
                         if (distance <= 50 && "LANDING".equals(status)) {
