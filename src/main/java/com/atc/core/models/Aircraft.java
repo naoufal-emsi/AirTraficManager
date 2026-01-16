@@ -16,7 +16,6 @@ public class Aircraft {
     private volatile LocalDateTime eta;
     private volatile Status status;
     private volatile EmergencyType emergencyType;
-    private volatile int priority;
     private volatile String assignedRunway;
     private volatile LocalDateTime lastStateChange;
     private String origin;
@@ -37,7 +36,6 @@ public class Aircraft {
         this.config = config;
         this.status = Status.APPROACHING;
         this.emergencyType = EmergencyType.NONE;
-        this.priority = 100;
         this.fuelBurnRate = 800.0 + Math.random() * 400.0;
         this.lastStateChange = LocalDateTime.now();
         this.fireTimeRemainingSeconds = FIRE_INITIAL_TIME;
@@ -55,7 +53,6 @@ public class Aircraft {
         this.config = new SimulationConfig(1000, 1, type.getFuelBurnRateKgPerSecond() * 3600, 30, 120);
         this.status = Status.APPROACHING;
         this.emergencyType = EmergencyType.NONE;
-        this.priority = 100;
         this.fuelBurnRate = type.getFuelBurnRateKgPerSecond() * 3600;
         this.lastStateChange = LocalDateTime.now();
         this.fireTimeRemainingSeconds = FIRE_INITIAL_TIME;
@@ -104,7 +101,6 @@ public class Aircraft {
     public synchronized void escalateToFuelLow() {
         if (emergencyType == EmergencyType.NONE) {
             emergencyType = EmergencyType.FUEL_LOW;
-            priority = 50;
             speedMetersPerSecond *= 0.9;
             lastStateChange = LocalDateTime.now();
         }
@@ -113,7 +109,6 @@ public class Aircraft {
     public synchronized void escalateToFuelCritical() {
         if (emergencyType == EmergencyType.FUEL_LOW || emergencyType == EmergencyType.NONE) {
             emergencyType = EmergencyType.FUEL_CRITICAL;
-            priority = 10;
             lastStateChange = LocalDateTime.now();
         }
     }
@@ -122,15 +117,6 @@ public class Aircraft {
         this.emergencyType = type;
         if (type == EmergencyType.FIRE) {
             this.fireTimeRemainingSeconds = FIRE_INITIAL_TIME;
-        }
-        switch(type) {
-            case FIRE: priority = 1; break;
-            case MEDICAL: priority = 5; break;
-            case SECURITY: priority = 8; break;
-            case FUEL_CRITICAL: priority = 10; break;
-            case FUEL_LOW: priority = 50; break;
-            case WEATHER_STORM: priority = 30; break;
-            default: priority = 100;
         }
         lastStateChange = LocalDateTime.now();
     }
@@ -160,7 +146,7 @@ public class Aircraft {
     public boolean needsImmediateLanding() {
         return emergencyType == EmergencyType.FIRE || 
                emergencyType == EmergencyType.FUEL_CRITICAL ||
-               (emergencyType == EmergencyType.MEDICAL && priority < 10);
+               emergencyType == EmergencyType.MEDICAL;
     }
 
     public String getId() { return id; }
@@ -173,7 +159,6 @@ public class Aircraft {
     public Status getStatus() { return status; }
     public Status getCurrentStatus() { return status; }
     public EmergencyType getEmergencyType() { return emergencyType; }
-    public int getPriority() { return priority; }
     public String getAssignedRunway() { return assignedRunway; }
     public LocalDateTime getLastStateChange() { return lastStateChange; }
     public String getOrigin() { return origin; }
@@ -186,7 +171,6 @@ public class Aircraft {
     public synchronized void setStatus(Status status) { this.status = status; this.lastStateChange = LocalDateTime.now(); }
     public void setCurrentStatus(Status status) { setStatus(status); }
     public synchronized void setEmergencyType(EmergencyType type) { this.emergencyType = type; }
-    public synchronized void setPriority(int priority) { this.priority = priority; }
     public synchronized void setAssignedRunway(String runway) { this.assignedRunway = runway; this.lastStateChange = LocalDateTime.now(); }
     public void setLastStateChange(LocalDateTime time) { this.lastStateChange = time; }
     public void setEmergency(boolean emergency) { if (emergency && emergencyType == EmergencyType.NONE) emergencyType = EmergencyType.FUEL_CRITICAL; }

@@ -36,8 +36,8 @@ public class RunwayManagerWorker implements Runnable {
                         Document runway = findFirstAvailableRunway(availableRunways);
                         
                         // If no runway available, check if we can preempt a HOLDING aircraft
-                        if (runway == null && priority < 100) { // Emergency aircraft
-                            runway = findPreemptableRunway(readyAircraft, availableRunways, dbManager, priority);
+                        if (runway == null && !"NONE".equals(aircraft.getString("emergency"))) {
+                            runway = findPreemptableRunway(readyAircraft, availableRunways, dbManager, aircraft);
                         }
                         
                         if (runway != null) {
@@ -92,13 +92,13 @@ public class RunwayManagerWorker implements Runnable {
             .orElse(null);
     }
     
-    private Document findPreemptableRunway(List<Document> allAircraft, List<Document> runways, DatabaseManager dbManager, int emergencyPriority) {
-        // Find runway occupied by aircraft with lower priority that hasn't started landing yet
+    private Document findPreemptableRunway(List<Document> allAircraft, List<Document> runways, DatabaseManager dbManager, Document emergencyAircraft) {
+        double emergencyThreat = calculateThreatTime(emergencyAircraft);
+        
         for (Document runway : runways) {
             if ("OCCUPIED".equals(runway.getString("status"))) {
                 String currentCallsign = runway.getString("currentAircraft");
                 if (currentCallsign != null) {
-                    // Find the aircraft using this runway
                     Document currentAircraft = allAircraft.stream()
                         .filter(a -> currentCallsign.equals(a.getString("callsign")))
                         .findFirst()
@@ -106,29 +106,26 @@ public class RunwayManagerWorker implements Runnable {
                     
                     if (currentAircraft != null) {
                         String currentStatus = currentAircraft.getString("status");
-                        int currentPriority = currentAircraft.getInteger("priority", 100);
                         double currentDistance = currentAircraft.getDouble("distance");
+                        double currentThreat = calculateThreatTime(currentAircraft);
                         
-                        // Can preempt if:
-                        // 1. Aircraft is LANDING but still far (distance > 1000m) - hasn't really started landing
-                        // 2. Aircraft has lower priority than emergency
-                        if ("LANDING".equals(currentStatus) && currentDistance > 1000 && currentPriority > emergencyPriority) {
-                            // Preempt: send aircraft back to HOLDING
+                        // Can preempt if emergency has lower threat time and current aircraft is still far
+                        if ("LANDING".equals(currentStatus) && currentDistance > 1000 && emergencyThreat < currentThreat) {
                             dbManager.updateActiveAircraft(currentCallsign, 
                                 new Document("status", "HOLDING")
                                     .append("assignedRunway", null));
                             
-                            String logMsg = "Aircraft " + currentCallsign + " (priority " + currentPriority + ") preempted by emergency (priority " + emergencyPriority + ")";
+                            String logMsg = "Aircraft " + currentCallsign + " (threat: " + String.format("%.0f", currentThreat) + "s) preempted by emergency (threat: " + String.format("%.0f", emergencyThreat) + "s)";
                             dbManager.saveRunwayEvent(logMsg);
                             System.out.println(logMsg);
                             
-                            return runway; // Return this runway for the emergency aircraft
+                            return runway;
                         }
                     }
                 }
             }
         }
-        return null; // No preemptable runway found
+        return null;
     }
 
     private double calculateThreatTime(Document aircraft) {

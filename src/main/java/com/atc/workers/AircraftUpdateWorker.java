@@ -36,8 +36,7 @@ public class AircraftUpdateWorker implements Runnable {
                         if (distance <= 50 && "LANDING".equals(status)) {
                             updates.append("distance", 0.0)
                                    .append("status", "LANDED")
-                                   .append("emergency", "NONE")
-                                   .append("priority", 100);
+                                   .append("emergency", "NONE");
                         }
                         
                         dbManager.updateActiveAircraft(aircraft.getString("callsign"), updates);

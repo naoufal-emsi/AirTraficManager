@@ -145,7 +145,6 @@ public class DatabaseManager {
                 .append("destination", destination)
                 .append("status", status)
                 .append("emergency", emergency)
-                .append("priority", priority)
                 .append("fireTimeRemaining", 180.0)
                 .append("runway", null)
                 .append("timestamp", new Date());

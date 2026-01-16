@@ -12,18 +12,7 @@ public class EmergencyController {
     public void declareEmergency(String callsign, String emergencyType) {
         DatabaseManager dbManager = DatabaseManager.getInstance();
         
-        int priority = switch(emergencyType) {
-            case "FIRE" -> 1;
-            case "MEDICAL" -> 5;
-            case "SECURITY" -> 8;
-            case "FUEL_CRITICAL" -> 10;
-            case "FUEL_LOW" -> 50;
-            case "WEATHER_STORM" -> 30;
-            default -> 100;
-        };
-        
-        Document updates = new Document("emergency", emergencyType)
-            .append("priority", priority);
+        Document updates = new Document("emergency", emergencyType);
         
         if ("FIRE".equals(emergencyType)) {
             updates.append("fireTimeRemaining", 180.0);
