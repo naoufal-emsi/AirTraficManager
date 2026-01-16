@@ -22,6 +22,8 @@ public class Aircraft {
     private String origin;
     private String destination;
     private SimulationConfig config;
+    private volatile double fireTimeRemainingSeconds;
+    private static final double FIRE_INITIAL_TIME = 180.0;
 
     public Aircraft(String callsign, double fuelLevel, double speedMetersPerSecond, double distanceMeters, 
                    String origin, String destination, SimulationConfig config) {
@@ -38,6 +40,7 @@ public class Aircraft {
         this.priority = 100;
         this.fuelBurnRate = 800.0 + Math.random() * 400.0;
         this.lastStateChange = LocalDateTime.now();
+        this.fireTimeRemainingSeconds = FIRE_INITIAL_TIME;
         calculateETA();
     }
 
@@ -55,6 +58,7 @@ public class Aircraft {
         this.priority = 100;
         this.fuelBurnRate = type.getFuelBurnRateKgPerSecond() * 3600;
         this.lastStateChange = LocalDateTime.now();
+        this.fireTimeRemainingSeconds = FIRE_INITIAL_TIME;
         calculateETA();
     }
 
@@ -116,6 +120,9 @@ public class Aircraft {
 
     public synchronized void declareEmergency(EmergencyType type) {
         this.emergencyType = type;
+        if (type == EmergencyType.FIRE) {
+            this.fireTimeRemainingSeconds = FIRE_INITIAL_TIME;
+        }
         switch(type) {
             case FIRE: priority = 1; break;
             case MEDICAL: priority = 5; break;
@@ -126,6 +133,28 @@ public class Aircraft {
             default: priority = 100;
         }
         lastStateChange = LocalDateTime.now();
+    }
+
+    public double getThreatTimeSeconds() {
+        switch (emergencyType) {
+            case FIRE:
+                return fireTimeRemainingSeconds;
+            case FUEL_CRITICAL:
+            case FUEL_LOW:
+                if (speedMetersPerSecond <= 0 || fuelBurnRate <= 0) return Double.MAX_VALUE;
+                double fuelTime = (fuelLevel / fuelBurnRate) * 3600;
+                double runwayTime = distanceToAirportMeters / speedMetersPerSecond;
+                return Math.min(fuelTime, runwayTime);
+            default:
+                if (speedMetersPerSecond <= 0) return Double.MAX_VALUE;
+                return distanceToAirportMeters / speedMetersPerSecond;
+        }
+    }
+
+    public synchronized void decreaseFireTimer(double seconds) {
+        if (emergencyType == EmergencyType.FIRE) {
+            fireTimeRemainingSeconds = Math.max(0, fireTimeRemainingSeconds - seconds);
+        }
     }
 
     public boolean needsImmediateLanding() {
@@ -150,6 +179,7 @@ public class Aircraft {
     public String getOrigin() { return origin; }
     public String getDestination() { return destination; }
     public boolean isEmergency() { return emergencyType != EmergencyType.NONE; }
+    public double getFireTimeRemaining() { return fireTimeRemainingSeconds; }
 
     public synchronized void setFuelLevel(double fuelLevel) { this.fuelLevel = fuelLevel; }
     public synchronized void setSpeed(double speed) { this.speedMetersPerSecond = speed; }

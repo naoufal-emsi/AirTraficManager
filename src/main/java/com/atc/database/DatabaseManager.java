@@ -123,9 +123,22 @@ public class DatabaseManager {
         if (database == null) return;
         try {
             MongoCollection<Document> collection = database.getCollection("active_aircraft");
+            
+            double[] speeds = {150.0, 160.0, 250.0, 230.0, 210.0};
+            double[] burnRates = {800.0, 820.0, 840.0, 820.0, 850.0};
+            int typeIndex = 0;
+            for (int i = 0; i < speeds.length; i++) {
+                if (Math.abs(speed - speeds[i]) < 10) {
+                    typeIndex = i;
+                    break;
+                }
+            }
+            double fuelBurnRate = burnRates[typeIndex];
+            
             Document doc = new Document("callsign", callsign)
                 .append("aircraftType", aircraftType)
                 .append("fuel", fuel)
+                .append("fuelBurnRate", fuelBurnRate)
                 .append("speed", speed)
                 .append("distance", distance)
                 .append("origin", origin)
@@ -133,6 +146,7 @@ public class DatabaseManager {
                 .append("status", status)
                 .append("emergency", emergency)
                 .append("priority", priority)
+                .append("fireTimeRemaining", 180.0)
                 .append("runway", null)
                 .append("timestamp", new Date());
             collection.replaceOne(

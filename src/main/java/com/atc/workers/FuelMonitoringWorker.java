@@ -21,14 +21,37 @@ public class FuelMonitoringWorker implements Runnable {
                 for (Document aircraft : activeAircraft) {
                     if (!"LANDED".equals(aircraft.getString("status"))) {
                         double fuel = aircraft.getDouble("fuel");
+                        double fuelBurnRate = aircraft.getDouble("fuelBurnRate");
                         String currentEmergency = aircraft.getString("emergency");
                         
-                        if (fuel <= 0 && ("FUEL_LOW".equals(currentEmergency) || "FUEL_CRITICAL".equals(currentEmergency))) {
-                            Document updates = new Document("status", "CRASHED")
-                                .append("emergency", "FUEL_EXHAUSTED");
-                            dbManager.updateActiveAircraft(aircraft.getString("callsign"), updates);
-                            dbManager.saveEmergencyEvent(aircraft.getString("callsign"), "CRITICAL: " + aircraft.getString("callsign") + " ran out of fuel and crashed");
+                        // Burn fuel
+                        double fuelBurned = (fuelBurnRate / 3600.0) * timeStepSeconds;
+                        fuel = Math.max(0, fuel - fuelBurned);
+                        
+                        Document updates = new Document("fuel", fuel);
+                        
+                        // Decrease fire timer if FIRE emergency
+                        if ("FIRE".equals(currentEmergency)) {
+                            double fireTime = aircraft.getDouble("fireTimeRemaining");
+                            fireTime = Math.max(0, fireTime - timeStepSeconds);
+                            updates.append("fireTimeRemaining", fireTime);
+                            
+                            if (fireTime <= 0) {
+                                updates.append("status", "CRASHED")
+                                       .append("emergency", "FIRE_STRUCTURAL_FAILURE");
+                                dbManager.saveEmergencyEvent(aircraft.getString("callsign"), 
+                                    "CRITICAL: " + aircraft.getString("callsign") + " fire caused structural failure");
+                            }
                         }
+                        
+                        if (fuel <= 0 && ("FUEL_LOW".equals(currentEmergency) || "FUEL_CRITICAL".equals(currentEmergency))) {
+                            updates.append("status", "CRASHED")
+                                   .append("emergency", "FUEL_EXHAUSTED");
+                            dbManager.saveEmergencyEvent(aircraft.getString("callsign"), 
+                                "CRITICAL: " + aircraft.getString("callsign") + " ran out of fuel and crashed");
+                        }
+                        
+                        dbManager.updateActiveAircraft(aircraft.getString("callsign"), updates);
                     }
                 }
                 Thread.sleep((long)(timeStepSeconds * 1000));

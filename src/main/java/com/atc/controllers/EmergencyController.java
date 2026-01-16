@@ -24,6 +24,11 @@ public class EmergencyController {
         
         Document updates = new Document("emergency", emergencyType)
             .append("priority", priority);
+        
+        if ("FIRE".equals(emergencyType)) {
+            updates.append("fireTimeRemaining", 180.0);
+        }
+        
         dbManager.updateActiveAircraft(callsign, updates);
         
         String message = switch(emergencyType) {

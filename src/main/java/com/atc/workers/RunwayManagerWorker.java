@@ -20,17 +20,11 @@ public class RunwayManagerWorker implements Runnable {
                     List<Document> readyAircraft = dbManager.getAllActiveAircraft();
                     List<Document> availableRunways = dbManager.getAllRunways();
                 
-                // Sort by priority first, then by distance (closer = higher priority)
+                // Sort by threat time - who will die first gets priority
                 readyAircraft.sort((a1, a2) -> {
-                    int p1 = a1.getInteger("priority", 100);
-                    int p2 = a2.getInteger("priority", 100);
-                    if (p1 != p2) {
-                        return Integer.compare(p1, p2); // Lower priority number = higher priority
-                    }
-                    // Same priority, sort by distance (closer first)
-                    double d1 = a1.getDouble("distance");
-                    double d2 = a2.getDouble("distance");
-                    return Double.compare(d1, d2); // Closer distance = higher priority
+                    double threat1 = calculateThreatTime(a1);
+                    double threat2 = calculateThreatTime(a2);
+                    return Double.compare(threat1, threat2);
                 });
                 
                 // Handle preemption: Emergency can take runway from HOLDING aircraft
@@ -59,8 +53,10 @@ public class RunwayManagerWorker implements Runnable {
                                     .append("assignedRunway", runwayId));
                             
                             String emergency = aircraft.getString("emergency");
+                            double threatTime = calculateThreatTime(aircraft);
                             String logMsg = "Aircraft " + callsign + 
-                                          ("NONE".equals(emergency) ? "" : " [" + emergency + " - PRIORITY " + priority + "]" ) +
+                                          ("NONE".equals(emergency) ? "" : 
+                                              " [" + emergency + " - THREAT: " + String.format("%.0f", threatTime) + "s]" ) +
                                           " assigned to " + runwayId +
                                           " at distance " + String.format("%.0f", aircraft.getDouble("distance")) + "m";
                             dbManager.saveRunwayEvent(logMsg);
@@ -133,6 +129,26 @@ public class RunwayManagerWorker implements Runnable {
             }
         }
         return null; // No preemptable runway found
+    }
+
+    private double calculateThreatTime(Document aircraft) {
+        String emergency = aircraft.getString("emergency");
+        double distance = aircraft.getDouble("distance");
+        double speed = aircraft.getDouble("speed");
+        double fuel = aircraft.getDouble("fuel");
+        double fuelBurnRate = aircraft.getDouble("fuelBurnRate");
+        
+        if ("FIRE".equals(emergency)) {
+            return aircraft.getDouble("fireTimeRemaining");
+        } else if ("FUEL_CRITICAL".equals(emergency) || "FUEL_LOW".equals(emergency)) {
+            if (speed <= 0 || fuelBurnRate <= 0) return Double.MAX_VALUE;
+            double fuelTime = (fuel / fuelBurnRate) * 3600;
+            double runwayTime = distance / speed;
+            return Math.min(fuelTime, runwayTime);
+        } else {
+            if (speed <= 0) return Double.MAX_VALUE;
+            return distance / speed;
+        }
     }
 
     public void stop() {
