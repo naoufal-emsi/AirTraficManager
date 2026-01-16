@@ -71,14 +71,13 @@ public class DatabaseManager {
         }
     }
 
-    public void insertRunway(String runwayId, String status, String currentAircraft, double thresholdPosition) {
+    public void insertRunway(String runwayId, String status, String currentAircraft) {
         if (database == null) return;
         try {
             MongoCollection<Document> collection = database.getCollection("runways");
             Document doc = new Document("runwayId", runwayId)
                 .append("status", status)
-                .append("currentAircraft", currentAircraft)
-                .append("thresholdPosition", thresholdPosition);
+                .append("currentAircraft", currentAircraft);
             collection.replaceOne(
                 new Document("runwayId", runwayId),
                 doc,

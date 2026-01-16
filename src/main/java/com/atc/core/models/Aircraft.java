@@ -130,7 +130,11 @@ public class Aircraft {
             case FIRE:
                 return fireTimeRemainingSeconds;
             case FUEL_CRITICAL:
+                // FUEL_CRITICAL: only fuel time matters, not distance
+                if (fuelBurnRate <= 0) return Double.MAX_VALUE;
+                return (fuelLevel / fuelBurnRate) * 3600;
             case FUEL_LOW:
+                // FUEL_LOW: consider both fuel and distance
                 if (speedMetersPerSecond <= 0 || fuelBurnRate <= 0) return Double.MAX_VALUE;
                 double fuelTime = (fuelLevel / fuelBurnRate) * 3600;
                 double runwayTime = distanceToAirportMeters / speedMetersPerSecond;

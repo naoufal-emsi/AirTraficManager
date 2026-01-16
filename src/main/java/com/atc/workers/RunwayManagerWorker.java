@@ -137,12 +137,18 @@ public class RunwayManagerWorker implements Runnable {
         
         if ("FIRE".equals(emergency)) {
             return aircraft.getDouble("fireTimeRemaining");
-        } else if ("FUEL_CRITICAL".equals(emergency) || "FUEL_LOW".equals(emergency)) {
+        } else if ("FUEL_CRITICAL".equals(emergency)) {
+            // FUEL_CRITICAL: only care about fuel time, not distance
+            if (fuelBurnRate <= 0) return Double.MAX_VALUE;
+            return (fuel / fuelBurnRate) * 3600;
+        } else if ("FUEL_LOW".equals(emergency)) {
+            // FUEL_LOW: consider both fuel and distance
             if (speed <= 0 || fuelBurnRate <= 0) return Double.MAX_VALUE;
             double fuelTime = (fuel / fuelBurnRate) * 3600;
             double runwayTime = distance / speed;
             return Math.min(fuelTime, runwayTime);
         } else {
+            // Normal aircraft: just time to runway
             if (speed <= 0) return Double.MAX_VALUE;
             return distance / speed;
         }

@@ -90,7 +90,7 @@ public class AirTrafficControlGUI extends JFrame {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createTitledBorder("Runways (Database)"));
         
-        String[] columns = {"Runway ID", "Position (m)", "Status", "Aircraft"};
+        String[] columns = {"Runway ID", "Status", "Aircraft"};
         runwayTableModel = new DefaultTableModel(columns, 0);
         JTable table = new JTable(runwayTableModel);
         panel.add(new JScrollPane(table), BorderLayout.CENTER);
@@ -210,43 +210,33 @@ public class AirTrafficControlGUI extends JFrame {
     }
     
     private void addRunway() {
-        String position = JOptionPane.showInputDialog(this, "Enter runway position (meters):", "Add Runway", JOptionPane.QUESTION_MESSAGE);
-        if (position == null || position.trim().isEmpty()) {
+        List<Document> runways = dbManager.getAllRunways();
+        
+        Set<String> existingIds = new HashSet<>();
+        for (Document r : runways) {
+            existingIds.add(r.getString("runwayId"));
+        }
+        
+        String runwayId = null;
+        for (int num = 1; num <= 36; num++) {
+            for (String side : new String[]{"L", "R", "C"}) {
+                String candidate = "RWY-" + String.format("%02d", num) + side;
+                if (!existingIds.contains(candidate)) {
+                    runwayId = candidate;
+                    break;
+                }
+            }
+            if (runwayId != null) break;
+        }
+        
+        if (runwayId == null) {
+            log("Cannot add more runways - all IDs used");
             return;
         }
         
-        try {
-            double positionMeters = Double.parseDouble(position.trim());
-            List<Document> runways = dbManager.getAllRunways();
-            
-            Set<String> existingIds = new HashSet<>();
-            for (Document r : runways) {
-                existingIds.add(r.getString("runwayId"));
-            }
-            
-            String runwayId = null;
-            for (int num = 1; num <= 36; num++) {
-                for (String side : new String[]{"L", "R", "C"}) {
-                    String candidate = "RWY-" + String.format("%02d", num) + side;
-                    if (!existingIds.contains(candidate)) {
-                        runwayId = candidate;
-                        break;
-                    }
-                }
-                if (runwayId != null) break;
-            }
-            
-            if (runwayId == null) {
-                log("Cannot add more runways - all IDs used");
-                return;
-            }
-            
-            dbManager.insertRunway(runwayId, "AVAILABLE", null, positionMeters);
-            log("Added runway: " + runwayId + " at position " + positionMeters + "m");
-            updateDisplay();
-        } catch (NumberFormatException e) {
-            log("Invalid position value. Please enter a number.");
-        }
+        dbManager.insertRunway(runwayId, "AVAILABLE", null);
+        log("Added runway: " + runwayId);
+        updateDisplay();
     }
 
     public void updateDisplay() {
@@ -276,7 +266,6 @@ public class AirTrafficControlGUI extends JFrame {
         for (Document runway : runways) {
             runwayTableModel.addRow(new Object[]{
                 runway.getString("runwayId"),
-                String.format("%.0f", runway.getDouble("thresholdPosition")),
                 runway.getString("status"),
                 runway.getString("currentAircraft") != null ? runway.getString("currentAircraft") : "None"
             });
