@@ -5,6 +5,7 @@ import org.bson.Document;
 import java.util.List;
 
 public class RunwayManagerWorker implements Runnable {
+    private static final Object RUNWAY_LOCK = new Object();
     private volatile boolean running = true;
 
     public RunwayManagerWorker() {
@@ -15,8 +16,9 @@ public class RunwayManagerWorker implements Runnable {
         DatabaseManager dbManager = DatabaseManager.getInstance();
         while (running) {
             try {
-                List<Document> readyAircraft = dbManager.getAllActiveAircraft();
-                List<Document> availableRunways = dbManager.getAllRunways();
+                synchronized (RUNWAY_LOCK) {
+                    List<Document> readyAircraft = dbManager.getAllActiveAircraft();
+                    List<Document> availableRunways = dbManager.getAllRunways();
                 
                 readyAircraft.sort((a1, a2) -> {
                     int p1 = a1.getInteger("priority", 100);
@@ -67,6 +69,7 @@ public class RunwayManagerWorker implements Runnable {
                             dbManager.saveRunwayEvent("Aircraft " + aircraft.getString("callsign") + " landed safely on " + assignedRunway);
                         }
                     }
+                }
                 }
                 Thread.sleep(2000);
             } catch (InterruptedException e) {
