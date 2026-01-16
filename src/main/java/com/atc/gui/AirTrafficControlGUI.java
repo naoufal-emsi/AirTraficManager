@@ -117,36 +117,36 @@ public class AirTrafficControlGUI extends JFrame {
         JPanel buttonPanel = new JPanel(new GridLayout(3, 2, 10, 10));
         buttonPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
-        JButton fuelLowBtn = new JButton("FUEL LOW Emergency");
-        fuelLowBtn.setBackground(new Color(255, 200, 100));
-        fuelLowBtn.addActionListener(e -> triggerEmergency("FUEL_LOW", 50));
+        JButton fireBtn = new JButton("FIRE Emergency");
+        fireBtn.setBackground(new Color(255, 50, 50));
+        fireBtn.addActionListener(e -> triggerEmergency("FIRE", 1));
         
-        JButton fuelCriticalBtn = new JButton("FUEL CRITICAL Emergency");
+        JButton medicalBtn = new JButton("MEDICAL Emergency");
+        medicalBtn.setBackground(new Color(100, 150, 255));
+        medicalBtn.addActionListener(e -> triggerEmergency("MEDICAL", 5));
+        
+        JButton securityBtn = new JButton("SECURITY Threat");
+        securityBtn.setBackground(new Color(255, 100, 150));
+        securityBtn.addActionListener(e -> triggerEmergency("SECURITY", 8));
+        
+        JButton fuelCriticalBtn = new JButton("FUEL CRITICAL");
         fuelCriticalBtn.setBackground(new Color(255, 100, 100));
         fuelCriticalBtn.addActionListener(e -> triggerEmergency("FUEL_CRITICAL", 10));
         
-        JButton medicalMinorBtn = new JButton("MEDICAL (Minor) Emergency");
-        medicalMinorBtn.setBackground(new Color(150, 200, 255));
-        medicalMinorBtn.addActionListener(e -> triggerEmergency("MEDICAL", 20));
+        JButton weatherBtn = new JButton("WEATHER STORM");
+        weatherBtn.setBackground(new Color(150, 150, 200));
+        weatherBtn.addActionListener(e -> triggerEmergency("WEATHER_STORM", 30));
         
-        JButton medicalCriticalBtn = new JButton("MEDICAL (Critical) Emergency");
-        medicalCriticalBtn.setBackground(new Color(100, 150, 255));
-        medicalCriticalBtn.addActionListener(e -> triggerEmergency("MEDICAL", 5));
+        JButton fuelLowBtn = new JButton("FUEL LOW");
+        fuelLowBtn.setBackground(new Color(255, 200, 100));
+        fuelLowBtn.addActionListener(e -> triggerEmergency("FUEL_LOW", 50));
         
-        JButton securityMinorBtn = new JButton("SECURITY (Minor) Threat");
-        securityMinorBtn.setBackground(new Color(255, 200, 200));
-        securityMinorBtn.addActionListener(e -> triggerEmergency("SECURITY", 15));
-        
-        JButton securityCriticalBtn = new JButton("SECURITY (Critical) Threat");
-        securityCriticalBtn.setBackground(new Color(255, 100, 150));
-        securityCriticalBtn.addActionListener(e -> triggerEmergency("SECURITY", 8));
-        
-        buttonPanel.add(fuelLowBtn);
+        buttonPanel.add(fireBtn);
+        buttonPanel.add(medicalBtn);
+        buttonPanel.add(securityBtn);
         buttonPanel.add(fuelCriticalBtn);
-        buttonPanel.add(medicalMinorBtn);
-        buttonPanel.add(medicalCriticalBtn);
-        buttonPanel.add(securityMinorBtn);
-        buttonPanel.add(securityCriticalBtn);
+        buttonPanel.add(weatherBtn);
+        buttonPanel.add(fuelLowBtn);
         
         panel.add(buttonPanel, BorderLayout.CENTER);
         return panel;
@@ -186,12 +186,12 @@ public class AirTrafficControlGUI extends JFrame {
         dbManager.updateActiveAircraft(callsign, updates);
         
         String message = switch(emergencyType) {
-            case "FUEL_LOW" -> "FUEL LOW - " + callsign + " requesting priority landing (Priority: " + priority + ")";
+            case "FIRE" -> "MAYDAY - " + callsign + " FIRE emergency, immediate landing required (Priority: " + priority + ")";
+            case "MEDICAL" -> "PAN-PAN - " + callsign + " medical emergency (Priority: " + priority + ")";
+            case "SECURITY" -> "SECURITY ALERT - " + callsign + " security threat (Priority: " + priority + ")";
             case "FUEL_CRITICAL" -> "MAYDAY - " + callsign + " FUEL CRITICAL, immediate landing required (Priority: " + priority + ")";
-            case "MEDICAL" -> priority < 10 ? "MAYDAY - " + callsign + " critical medical emergency (Priority: " + priority + ")" 
-                                            : "PAN-PAN - " + callsign + " medical emergency (Priority: " + priority + ")";
-            case "SECURITY" -> priority < 10 ? "SECURITY ALERT - " + callsign + " critical threat (Priority: " + priority + ")" 
-                                             : "SECURITY - " + callsign + " security concern (Priority: " + priority + ")";
+            case "FUEL_LOW" -> "FUEL LOW - " + callsign + " requesting priority landing (Priority: " + priority + ")";
+            case "WEATHER_STORM" -> "WEATHER - " + callsign + " unable to continue approach (Priority: " + priority + ")";
             default -> callsign + " emergency declared";
         };
         
