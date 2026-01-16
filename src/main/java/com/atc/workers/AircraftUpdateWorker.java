@@ -19,19 +19,25 @@ public class AircraftUpdateWorker implements Runnable {
             try {
                 List<Document> activeAircraft = dbManager.getAllActiveAircraft();
                 for (Document aircraft : activeAircraft) {
-                    if (!"LANDED".equals(aircraft.getString("status"))) {
-                        double currentFuel = aircraft.getDouble("fuel");
-                        double currentDistance = aircraft.getDouble("distance");
+                    String status = aircraft.getString("status");
+                    if ("APPROACHING".equals(status) || "LANDING".equals(status)) {
+                        double distance = aircraft.getDouble("distance");
+                        double speed = aircraft.getDouble("speed");
                         
-                        // Update fuel and distance
-                        double newFuel = Math.max(0, currentFuel - 50);
-                        double newDistance = Math.max(0, currentDistance - 2);
+                        distance -= speed * timeStepSeconds;
+                        distance = Math.max(0, distance);
                         
-                        Document updates = new Document("fuel", newFuel)
-                            .append("distance", newDistance);
-                            
-                        if (newDistance <= 0) {
+                        Document updates = new Document("distance", distance);
+                        
+                        if (distance <= 5000 && "APPROACHING".equals(status)) {
                             updates.append("status", "READY_TO_LAND");
+                        }
+                        
+                        if (distance <= 50 && "LANDING".equals(status)) {
+                            updates.append("distance", 0.0)
+                                   .append("status", "LANDED")
+                                   .append("emergency", "NONE")
+                                   .append("priority", 100);
                         }
                         
                         dbManager.updateActiveAircraft(aircraft.getString("callsign"), updates);

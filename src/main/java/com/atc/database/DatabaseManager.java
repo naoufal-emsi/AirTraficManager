@@ -30,6 +30,7 @@ public class DatabaseManager {
         if (database == null) return;
         try {
             database.getCollection("active_aircraft").deleteMany(new Document());
+            database.getCollection("runways").deleteMany(new Document());
             database.getCollection("runway_events").deleteMany(new Document());
             database.getCollection("emergency_events").deleteMany(new Document());
             database.getCollection("weather_events").deleteMany(new Document());
@@ -70,14 +71,14 @@ public class DatabaseManager {
         }
     }
 
-    public void insertRunway(String runwayId, String status, String currentAircraft, double position) {
+    public void insertRunway(String runwayId, String status, String currentAircraft, double thresholdPosition) {
         if (database == null) return;
         try {
             MongoCollection<Document> collection = database.getCollection("runways");
             Document doc = new Document("runwayId", runwayId)
                 .append("status", status)
                 .append("currentAircraft", currentAircraft)
-                .append("position", position);
+                .append("thresholdPosition", thresholdPosition);
             collection.replaceOne(
                 new Document("runwayId", runwayId),
                 doc,
@@ -106,7 +107,7 @@ public class DatabaseManager {
             
             double fuel = capacities[typeIndex] * (0.5 + random.nextDouble() * 0.4);
             double speed = speeds[typeIndex];
-            double distance = 50000 + random.nextDouble() * 200000;
+            double distance = 15000 + random.nextDouble() * 15000;
             
             insertActiveAircraft(callsign, type, fuel, speed, distance, origin, destination, "APPROACHING", "NONE", 100);
             return callsign;

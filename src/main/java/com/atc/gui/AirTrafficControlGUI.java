@@ -276,7 +276,7 @@ public class AirTrafficControlGUI extends JFrame {
         for (Document runway : runways) {
             runwayTableModel.addRow(new Object[]{
                 runway.getString("runwayId"),
-                String.format("%.0f", runway.getDouble("position")),
+                String.format("%.0f", runway.getDouble("thresholdPosition")),
                 runway.getString("status"),
                 runway.getString("currentAircraft") != null ? runway.getString("currentAircraft") : "None"
             });

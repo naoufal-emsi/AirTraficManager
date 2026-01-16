@@ -33,34 +33,38 @@ public class RunwayManagerWorker implements Runnable {
                 
                 for (Document aircraft : readyAircraft) {
                     if ("READY_TO_LAND".equals(aircraft.getString("status"))) {
-                        Document runway = findClosestAvailableRunway(availableRunways, aircraft);
+                        Document runway = findFirstAvailableRunway(availableRunways);
                         if (runway != null) {
-                            dbManager.updateRunway(runway.getString("runwayId"), 
-                                new Document("status", "OCCUPIED")
-                                    .append("currentAircraft", aircraft.getString("callsign")));
+                            String callsign = aircraft.getString("callsign");
+                            String runwayId = runway.getString("runwayId");
                             
-                            dbManager.updateActiveAircraft(aircraft.getString("callsign"), 
+                            dbManager.updateRunway(runwayId, 
+                                new Document("status", "OCCUPIED")
+                                    .append("currentAircraft", callsign));
+                            
+                            dbManager.updateActiveAircraft(callsign, 
                                 new Document("status", "LANDING")
-                                    .append("runway", runway.getString("runwayId")));
+                                    .append("assignedRunway", runwayId));
                             
                             String emergency = aircraft.getString("emergency");
-                            String logMsg = "Aircraft " + aircraft.getString("callsign") + 
+                            String logMsg = "Aircraft " + callsign + 
                                           ("NONE".equals(emergency) ? "" : " [" + emergency + " - PRIORITY]" ) +
-                                          " assigned to " + runway.getString("runwayId");
+                                          " assigned to " + runwayId +
+                                          " at distance " + String.format("%.0f", aircraft.getDouble("distance")) + "m";
                             dbManager.saveRunwayEvent(logMsg);
-                            
-                            Thread.sleep(5000);
-                            
-                            dbManager.updateActiveAircraft(aircraft.getString("callsign"), 
-                                new Document("status", "LANDED")
-                                    .append("emergency", "NONE")
-                                    .append("priority", 100));
-                            
-                            dbManager.updateRunway(runway.getString("runwayId"), 
+                            System.out.println(logMsg);
+                        }
+                    } else if ("LANDED".equals(aircraft.getString("status"))) {
+                        String assignedRunway = aircraft.getString("assignedRunway");
+                        if (assignedRunway != null) {
+                            dbManager.updateRunway(assignedRunway, 
                                 new Document("status", "AVAILABLE")
                                     .append("currentAircraft", null));
                             
-                            dbManager.saveRunwayEvent("Aircraft " + aircraft.getString("callsign") + " landed safely on " + runway.getString("runwayId"));
+                            dbManager.updateActiveAircraft(aircraft.getString("callsign"),
+                                new Document("assignedRunway", null));
+                            
+                            dbManager.saveRunwayEvent("Aircraft " + aircraft.getString("callsign") + " landed safely on " + assignedRunway);
                         }
                     }
                 }
@@ -72,25 +76,11 @@ public class RunwayManagerWorker implements Runnable {
         }
     }
     
-    private Document findClosestAvailableRunway(List<Document> runways, Document aircraft) {
-        double aircraftDistance = aircraft.getDouble("distance");
-        Document closest = runways.stream()
+    private Document findFirstAvailableRunway(List<Document> runways) {
+        return runways.stream()
             .filter(r -> "AVAILABLE".equals(r.getString("status")))
-            .min((r1, r2) -> {
-                double pos1 = r1.getDouble("position");
-                double pos2 = r2.getDouble("position");
-                double dist1 = Math.abs(aircraftDistance - pos1);
-                double dist2 = Math.abs(aircraftDistance - pos2);
-                return Double.compare(dist1, dist2);
-            })
+            .findFirst()
             .orElse(null);
-        
-        if (closest != null) {
-            System.out.println("Aircraft " + aircraft.getString("callsign") + 
-                " at distance " + aircraftDistance + "m assigned to " + 
-                closest.getString("runwayId") + " at position " + closest.getDouble("position") + "m");
-        }
-        return closest;
     }
 
     public void stop() {
