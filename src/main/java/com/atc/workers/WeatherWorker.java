@@ -14,13 +14,9 @@ public class WeatherWorker implements Runnable {
 
     @Override
     public void run() {
-        DatabaseManager dbManager = DatabaseManager.getInstance();
         while (running) {
             try {
                 Thread.sleep(30000);
-                if (random.nextDouble() < 0.3) {
-                    generateWeatherEvent(dbManager);
-                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;

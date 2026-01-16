@@ -90,7 +90,7 @@ public class AirTrafficControlGUI extends JFrame {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createTitledBorder("Runways (Database)"));
         
-        String[] columns = {"Runway ID", "Status", "Aircraft"};
+        String[] columns = {"Runway ID", "Position (m)", "Status", "Aircraft"};
         runwayTableModel = new DefaultTableModel(columns, 0);
         JTable table = new JTable(runwayTableModel);
         panel.add(new JScrollPane(table), BorderLayout.CENTER);
@@ -259,6 +259,7 @@ public class AirTrafficControlGUI extends JFrame {
         for (Document runway : runways) {
             runwayTableModel.addRow(new Object[]{
                 runway.getString("runwayId"),
+                String.format("%.0f", runway.getDouble("position")),
                 runway.getString("status"),
                 runway.getString("currentAircraft") != null ? runway.getString("currentAircraft") : "None"
             });
